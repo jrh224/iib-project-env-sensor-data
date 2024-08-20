@@ -79,4 +79,36 @@ class SensorData:
         plt.grid(True)
         # Rotate and format date labels for better readability
         plt.gcf().autofmt_xdate()
-        plt.show()
+
+    def smooth_data(self, window_size=3):
+        """
+        NB: This only works if data has already been filtered by reading type (see filter_by_reading_type() method)
+        """
+        # Apply a rolling window to smooth the 'y' values
+
+        df = self.df
+        df['_value'] = df['_value'].rolling(window=window_size).mean()
+        return SensorData(df=df)
+    
+    def get_gradient(self):
+        df = self.df
+        df['dy'] = df['_value'].diff()
+        df['dx'] = df['_time'].diff().dt.total_seconds()
+        df['_value'] = df['dy'] / df['dx'] # Calculate running gradient
+        return SensorData(df=df)
+    
+    def get_significant_values(self, threshold_factor_no_stds=2):
+        df = self.df
+        threshold = df['_value'].std() * threshold_factor_no_stds
+        print(threshold)
+        df['_value'] = df['_value'].abs() > threshold
+        return SensorData(df=df)
+    
+    def plot_vertical_peaks(self):
+        """
+        NB: Use this on data where the values are either 0 or 1 (e.g. after running 'get_significant_values())
+        """
+        # Iterate over the DataFrame and plot vertical lines
+        for _, row in self.df.iterrows():
+            if row['_value'] == 1:
+                plt.axvline(x=row['_time'], color='red', linestyle='--', linewidth=1)

@@ -2,6 +2,8 @@ from datetime import timedelta
 import os
 from matplotlib import pyplot as plt
 import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 
 class SensorData:
@@ -97,18 +99,35 @@ class SensorData:
         df['_value'] = df['dy'] / df['dx'] # Calculate running gradient
         return SensorData(df=df)
     
-    def get_significant_values(self, threshold_factor_no_stds=2):
-        df = self.df
-        threshold = df['_value'].std() * threshold_factor_no_stds
-        print(threshold)
-        df['_value'] = df['_value'].abs() > threshold
-        return SensorData(df=df)
+    def get_window_open_events(self, threshold_factor_no_stds=2, max_clusters=10):
+        threshold = self.df['_value'].std() * threshold_factor_no_stds
+        # create 2D array of all timestamps of detected event
+        ungrouped_signif_neg_vals = pd.Series(self.df[self.df['_value'] < -threshold]['_time']) # filter dataframe based on value being negative and bigger mag than threshold
+        ungrouped_data_reshaped = ungrouped_signif_neg_vals.values.reshape(-1, 1)
+
+        # Determine the optimal number of clusters using silhouette score
+        best_n_clusters = 2
+        best_score = -1
+        
+        for n_clusters in range(2, max_clusters + 1):
+            kmeans = KMeans(n_clusters=n_clusters).fit(ungrouped_data_reshaped)
+            labels = kmeans.labels_
+            score = silhouette_score(ungrouped_data_reshaped, labels)
+            
+            if score > best_score:
+                best_n_clusters = n_clusters
+                best_score = score
+        
+        print(f"Optimal number of clusters: {best_n_clusters}")
+
+        kmeans = KMeans(best_n_clusters).fit(ungrouped_data_reshaped)
+        data_with_clusters = pd.DataFrame({
+            'timestamps': ungrouped_signif_neg_vals,
+            'cluster': kmeans.labels_,
+        })
+        cluster_beginnings = data_with_clusters.groupby('cluster')['timestamps'].min().sort_values()
+        # cluster_centers = pd.to_datetime(kmeans.cluster_centers_.flatten())
+
+        return cluster_beginnings
     
-    def plot_vertical_peaks(self):
-        """
-        NB: Use this on data where the values are either 0 or 1 (e.g. after running 'get_significant_values())
-        """
-        # Iterate over the DataFrame and plot vertical lines
-        for _, row in self.df.iterrows():
-            if row['_value'] == 1:
-                plt.axvline(x=row['_time'], color='red', linestyle='--', linewidth=1)
+

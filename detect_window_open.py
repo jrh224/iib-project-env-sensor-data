@@ -18,7 +18,10 @@ smoothed_temp_data = temp_data.smooth_data(window_size=50)
 gradient_of_smoothed_temp = smoothed_temp_data.get_gradient()
 # gradient_of_smoothed_temp.plot('Gradient of smoothed temp data plotted every 15s, for RoomA', 'Time', 'Temp')
 
-peaks_of_smoothed_temp = gradient_of_smoothed_temp.get_significant_values()
-peaks_of_smoothed_temp.plot_vertical_peaks()
+steepest_section_centers = gradient_of_smoothed_temp.get_window_open_events()
+
+# Iterate over the steepest_section_centers and plot vertical lines
+for time in steepest_section_centers:
+    plt.axvline(x=time, color='red', linestyle='--', linewidth=1)
 
 plt.show()

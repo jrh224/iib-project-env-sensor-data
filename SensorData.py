@@ -1,3 +1,5 @@
+## 9th Oct: Defines SensorData class
+
 from datetime import timedelta
 import os
 from matplotlib import pyplot as plt
@@ -88,12 +90,12 @@ class SensorData:
         """
         # Apply a rolling window to smooth the 'y' values
 
-        df = self.df
+        df = self.df.copy() # Creates a deep copy of the dataframe, to avoid editing the original df
         df['_value'] = df['_value'].rolling(window=window_size).mean()
         return SensorData(df=df)
     
     def get_gradient(self):
-        df = self.df
+        df = self.df.copy() # Creates a deep copy of the dataframe, to avoid editing the original df
         df['dy'] = df['_value'].diff()
         df['dx'] = df['_time'].diff().dt.total_seconds()
         df['_value'] = df['dy'] / df['dx'] # Calculate running gradient

@@ -4,37 +4,24 @@
 
 
 from matplotlib import pyplot as plt
-from SensorData import SensorData
+from CustomDataframe import CustomDataframe
 
 filename = '15s 1week RoomA.csv'
-sensor_data = SensorData(filename=filename)
+sensor_data = CustomDataframe(filename=filename)
 
-filtered_data = sensor_data.filter_by_date(days=1)
-
-temp_data = filtered_data.filter_by_reading_type('T')
-controller_data = filtered_data.filter_by_reading_type('C')
-
-## temp_data.plot('Temp data plotted every 15s, for RoomA', 'Time', 'Temp')
-# controller_data.plot('Controller duty plotted every 15s, for RoomA', 'Time', 'Controller Duty')
-
-smoothed_temp_data = temp_data.smooth_data(window_size=50)
-
-gradient_of_smoothed_temp = smoothed_temp_data.get_gradient()
-# gradient_of_smoothed_temp.plot('Gradient of smoothed temp data plotted every 15s, for RoomA', 'Time', 'Temp')
-
-steepest_section_centers = gradient_of_smoothed_temp.get_window_open_events()
+sensor_data.filter_by_date(days=1)
+steepest_sections = sensor_data.get_sig_gradients(column='T')
 
 # Iterate over the steepest_section_centers and plot vertical lines where window open events occur
-for i, time in enumerate(steepest_section_centers):
+for i, time in enumerate(steepest_sections):
     if i == 0:
         plt.axvline(x=time, color='red', linestyle='--', linewidth=1, label='Rapid temperature drop')
     else:
         plt.axvline(x=time, color='red', linestyle='--', linewidth=1)
 
 # Now plot occupancy
-re_data = filtered_data.filter_by_reading_type('Re')
-smoothed_re_data = re_data.smooth_data(window_size=100)
-smoothed_re_data.plot('Smoothed Re data plotted every 15s, for RoomA', 'Time', 'Chance of occupancy')
+sensor_data.smooth_data('Re', window_size=100)
+sensor_data.plot(column='Re_smoothed', title='Smoothed Re data plotted every 15s, for RoomA', ylabel='Chance of occupancy')
 
 plt.show(block=True)
 
@@ -42,11 +29,13 @@ plt.show(block=True)
 # Now plot temperature
 plt.clf()
 
-for i, time in enumerate(steepest_section_centers):
+for i, time in enumerate(steepest_sections):
     if i == 0:
         plt.axvline(x=time, color='red', linestyle='--', linewidth=1, label='Rapid temperature drop')
     else:
         plt.axvline(x=time, color='red', linestyle='--', linewidth=1)
-smoothed_temp_data.plot('Smoothed temp data plotted every 15s, for RoomA', 'Time', 'Temp')
+
+sensor_data.smooth_data(column='T')
+sensor_data.plot(column='T_smoothed', title='Smoothed temp data plotted every 15s, for RoomA', ylabel='Temp')
 
 plt.show()

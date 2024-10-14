@@ -1,12 +1,11 @@
 ## 9th Oct: Plots e.g. temperature data, raw
 
 from matplotlib import pyplot as plt
-from SensorData import SensorData
+from CustomDataframe import CustomDataframe
 
-sensor_data = SensorData(filename='15s 1week RoomA.csv')
+sensor_data = CustomDataframe(filename='15s 1week RoomA.csv')
 
-filtered_data = sensor_data.filter_by_reading_type('T').filter_by_date(days=1)
-
-filtered_data.plot('Temp data plotted every 15s, for RoomA', 'Time', 'Temp')
+sensor_data.filter_by_date(days=1)
+sensor_data.plot(column='T', title='Temp data plotted every 15s, for RoomA', ylabel='Temp C')
 
 plt.show()

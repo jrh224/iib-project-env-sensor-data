@@ -97,6 +97,33 @@ class CustomDataframe:
         # Rotate and format date labels for better readability
         plt.gcf().autofmt_xdate()
 
+
+    def plot_dual(self, column1, column2, title=None, xlabel="Time", ylabel1 = "Value", ylabel2="Value"):
+        fig, ax1 = plt.subplots()
+        ax1.set_title(title)
+        ax1.grid(True)
+        
+        color = 'tab:red'
+        ax1.set_xlabel(xlabel)
+        ax1.set_ylabel(ylabel1, color=color)
+        ax1.scatter(self.df['datetime'], self.df[column1], s=10, alpha=0.7, color=color)
+        ax1.tick_params(axis='y', labelcolor=color)
+
+        ax2 = ax1.twinx()  # instantiate a second Axes that shares the same x-axis
+        color = 'tab:blue'
+        ax2.set_ylabel(ylabel2, color=color)  # we already handled the x-label with ax1
+        ax2.scatter(self.df['datetime'], self.df[column2], s=10, alpha=0.7, color=color)
+        ax2.tick_params(axis='y', labelcolor=color)
+
+        fig.tight_layout()
+
+        # Rotate and format date labels for better readability
+        plt.gcf().autofmt_xdate()
+        
+        plt.show()
+
+        return fig
+
         
     def smooth_data(self, column, window_size=50, in_place=True):
         # Apply a rolling window to smooth the 'y' values

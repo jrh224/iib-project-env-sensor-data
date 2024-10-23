@@ -3,8 +3,10 @@
 from datetime import timedelta
 import os
 from matplotlib import pyplot as plt
+import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+from sklearn.discriminant_analysis import StandardScaler
 from sklearn.metrics import silhouette_score
 
 
@@ -85,7 +87,7 @@ class CustomDataframe:
         else:
             return CustomDataframe(df=self.df[(self.df['datetime'] >= start_date) & (self.df['datetime'] <= end_date)])
         
-    def plot(self, column, title=None, label=None, xlabel="Time", ylabel="Value"):
+    def plot(self, column, title=None, label=None, xlabel="Time", ylabel="Value", show=True):
         # Plot the filtered data
         plt.scatter(self.df['datetime'], self.df[column], label=label, s=10, alpha=0.7)
         plt.title(title)
@@ -97,8 +99,11 @@ class CustomDataframe:
         # Rotate and format date labels for better readability
         plt.gcf().autofmt_xdate()
 
+        if show:
+            plt.show()
 
-    def plot_dual(self, column1, column2, title=None, xlabel="Time", ylabel1 = "Value", ylabel2="Value"):
+
+    def plot_dual(self, column1, column2, title=None, xlabel="Time", ylabel1 = "Value", ylabel2="Value", show=True):
         fig, ax1 = plt.subplots()
         ax1.set_title(title)
         ax1.grid(True)
@@ -120,9 +125,16 @@ class CustomDataframe:
         # Rotate and format date labels for better readability
         plt.gcf().autofmt_xdate()
         
-        plt.show()
+        if show:
+            plt.show(block=True)
+            plt.clf()
 
-        return fig
+    def plot_clusters(self):
+        colour_map = {0: 'red', 1: 'yellow', 2: 'green', 3: 'blue', 4:'purple', 5:'grey'}
+        for idx, row in self.df.iterrows():
+            # Create a bar for each timestamp
+            if pd.notna(row['cluster']):
+                plt.bar(x=row['datetime'], height=100, width=timedelta(seconds=15), color=colour_map[row['cluster']], alpha=0.3, align='center')
 
         
     def smooth_data(self, column, window_size=50, in_place=True):
@@ -211,3 +223,57 @@ class CustomDataframe:
         self.smooth_data(column=column, window_size=smoothing_window)
         self.get_gradient(column=(column+'_smoothed'))
         return self.get_sig_clusters(column=(column+'_smoothed_grad'), threshold_factor_no_stds=threshold_factor_no_stds, max_clusters=max_clusters, neg_only=True)
+    
+
+    def get_occupancy(self):
+        """
+        Identifies an arbitrary value indicating the likelihood that the room is occupied.
+        """
+
+        if 'Re_smoothed' not in self.df:
+            self.smooth_data(column="Re", window_size=150)
+        if 'Lux_smoothed' not in self.df:
+            self.smooth_data(column="Lux", window_size=150)
+
+        self.df["occupancy_factor"] = np.where(
+            self.df["Lux"] > 1,
+            self.df["Re_smoothed"],
+            self.df["Re_smoothed"] * 5 # More sensitive to Re if light is low
+        )
+        self.df["occupancy_factor"] = np.minimum(self.df["occupancy_factor"], 100)
+
+
+    def get_features(self, window_size):
+        """
+        Method for generating 2D numpy array of features, used for clustering timeseries data.
+        """
+        # NB: The mean is placed on the right hand edge of the window
+        Re_means = self.df['Re'].rolling(window=window_size).mean().to_numpy().reshape(-1,1)
+        Re_medians = self.df['Re'].rolling(window=window_size).median().to_numpy().reshape(-1, 1)
+        # Re_stddevs = self.df['Re'].rolling(window=window_size).std().to_numpy().reshape(-1, 1)
+        # Lux_means = self.df['Lux'].rolling(window=window_size).mean().to_numpy().reshape(-1,1)
+
+        return np.hstack([Re_means, Re_medians])
+    
+    def cluster_timeseries(self, n_clusters, window_size=120):
+        """
+        Label each timestamp entry with a cluster. Features used for clustering are defined
+        in get_features().
+        """
+        features = self.get_features(window_size=window_size)
+
+        # Remove rows with NaN values
+        features = features[~np.isnan(features).any(axis=1)]
+
+        # Normalize the feature matrix so that clustering works correctly
+        scaler = StandardScaler()
+        features_scaled = scaler.fit_transform(features)
+
+        kmeans = KMeans(n_clusters=n_clusters, random_state=0)
+        labels = kmeans.fit_predict(features_scaled) # Get cluster labels for each window
+
+        self.df['cluster'] = np.nan  # Initialize the cluster column with NaN
+        for i, label in enumerate(labels): # ASSUMES WINDOW ADDS LABEL TO RIGHT EDGE SO FIRST X VALUES ARE LOST
+            self.df.loc[i+window_size-1, 'cluster'] = label  # Label each point in the window
+
+

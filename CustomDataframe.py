@@ -163,6 +163,19 @@ class CustomDataframe:
         if not in_place:
             return CustomDataframe(df=df)
         
+    def get_optimal_clusters(self, max_clusters, features):
+        best_n_clusters = 2
+        best_score = -1
+        # Determine the optimal number of clusters using silhouette score
+        for i_clusters in range(2, max_clusters + 1):
+            kmeans = KMeans(n_clusters=i_clusters, random_state=0).fit(features)
+            labels = kmeans.labels_
+            score = silhouette_score(features, labels)
+            if score > best_score:
+                best_n_clusters = i_clusters
+                best_score = score
+        print(f"Optimal number of clusters: {best_n_clusters}")
+        return best_n_clusters
         
     def get_sig_clusters(self, column, threshold_factor_no_stds=2, max_clusters=10, neg_only=False):
         """
@@ -186,20 +199,7 @@ class CustomDataframe:
             ungrouped_signif_vals = pd.Series(self.df[abs(self.df['datetime']) > threshold]['datetime']) # filter df based on abs value being greater than threshold
         ungrouped_data_reshaped = ungrouped_signif_vals.values.reshape(-1, 1)
 
-        # Determine the optimal number of clusters using silhouette score
-        best_n_clusters = 2
-        best_score = -1
-        
-        for n_clusters in range(2, max_clusters + 1):
-            kmeans = KMeans(n_clusters=n_clusters).fit(ungrouped_data_reshaped)
-            labels = kmeans.labels_
-            score = silhouette_score(ungrouped_data_reshaped, labels)
-            
-            if score > best_score:
-                best_n_clusters = n_clusters
-                best_score = score
-        
-        print(f"Optimal number of clusters: {best_n_clusters}")
+        best_n_clusters = self.get_optimal_clusters(max_clusters=max_clusters, features=ungrouped_data_reshaped)
 
         kmeans = KMeans(best_n_clusters).fit(ungrouped_data_reshaped)
         data_with_clusters = pd.DataFrame({
@@ -250,15 +250,16 @@ class CustomDataframe:
         # NB: The mean is placed on the right hand edge of the window
         Re_means = self.df['Re'].rolling(window=window_size).mean().to_numpy().reshape(-1,1)
         Re_medians = self.df['Re'].rolling(window=window_size).median().to_numpy().reshape(-1, 1)
-        # Re_stddevs = self.df['Re'].rolling(window=window_size).std().to_numpy().reshape(-1, 1)
-        # Lux_means = self.df['Lux'].rolling(window=window_size).mean().to_numpy().reshape(-1,1)
+        
+        Rd_means = self.df['Rd'].rolling(window=window_size).mean().to_numpy().reshape(-1, 1)
+        Rd_medians = self.df['Rd'].rolling(window=window_size).median().to_numpy().reshape(-1, 1)
 
-        return np.hstack([Re_means, Re_medians])
+        return np.hstack([Re_means, Re_medians, Rd_means, Rd_medians])
     
-    def cluster_timeseries(self, n_clusters, window_size=120):
+    def cluster_timeseries(self, n_clusters=None, max_clusters = 5, window_size=120):
         """
         Label each timestamp entry with a cluster. Features used for clustering are defined
-        in get_features().
+        in get_features(). If n_clusters is not specified, optimal number of clusters is determined automatically.
         """
         features = self.get_features(window_size=window_size)
 
@@ -269,11 +270,15 @@ class CustomDataframe:
         scaler = StandardScaler()
         features_scaled = scaler.fit_transform(features)
 
-        kmeans = KMeans(n_clusters=n_clusters, random_state=0)
+        if n_clusters is None:
+            best_n_clusters = self.get_optimal_clusters(max_clusters=max_clusters, features=features_scaled)
+        else:
+            best_n_clusters = n_clusters
+
+        # Perform actual clustering using the optimal number of clusters
+        kmeans = KMeans(n_clusters=best_n_clusters, random_state=0)
         labels = kmeans.fit_predict(features_scaled) # Get cluster labels for each window
 
         self.df['cluster'] = np.nan  # Initialize the cluster column with NaN
         for i, label in enumerate(labels): # ASSUMES WINDOW ADDS LABEL TO RIGHT EDGE SO FIRST X VALUES ARE LOST
             self.df.loc[i+window_size-1, 'cluster'] = label  # Label each point in the window
-
-

@@ -282,3 +282,24 @@ class CustomDataframe:
         self.df['cluster'] = np.nan  # Initialize the cluster column with NaN
         for i, label in enumerate(labels): # ASSUMES WINDOW ADDS LABEL TO RIGHT EDGE SO FIRST X VALUES ARE LOST
             self.df.loc[i+window_size-1, 'cluster'] = label  # Label each point in the window
+
+    def get_fft(self, column, smoothing_window=25, sampling_interval=900): # Sampling interval is determined by the data. 900 seconds means one reading every 15 minutes
+        self.smooth_data(column=column, window_size=smoothing_window)
+
+        N = len(self.df["datetime"].to_numpy()) # number of readings
+
+        smoothed_data = self.df[column + "_smoothed"].to_numpy()
+        smoothed_data = smoothed_data[~np.isnan(smoothed_data)] # Remove NaN values
+        zero_mean_smoothed_data = smoothed_data - smoothed_data.mean() # Remove DC offset
+
+        # Apply FFT
+        fft_values = np.fft.fft(zero_mean_smoothed_data)
+        fft_freq = np.fft.fftfreq(N, d=sampling_interval)
+
+        normalized_fft_values = np.abs(fft_values) / N  # Normalize the FFT output by dividing by the number of samples
+
+        # Only keep the positive frequencies and values (since FFT is symmetric)
+        positive_freqs = fft_freq[:N // 2]
+        positive_fft_values = np.abs(normalized_fft_values[:N // 2])
+
+        return positive_freqs, positive_fft_values

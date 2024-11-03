@@ -2,11 +2,15 @@
 ## Design an unsupervised learning algorithm to identify the states
 
 from matplotlib import pyplot as plt
+import pandas as pd
 from CustomDataframe import CustomDataframe
 
 filename = '15s 1week RoomA.csv'
 sensor_data = CustomDataframe(filename=filename)
-sensor_data.filter_by_date(days=1)
+
+
+# sensor_data.filter_by_date(start_date='18/01/2024', days=1)
+sensor_data.filter_by_date(days=3)
 
 window_size = 120
 

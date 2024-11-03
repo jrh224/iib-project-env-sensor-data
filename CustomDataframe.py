@@ -8,6 +8,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.metrics import silhouette_score
+from scipy.signal import find_peaks
 
 
 class CustomDataframe:
@@ -254,7 +255,9 @@ class CustomDataframe:
         Rd_means = self.df['Rd'].rolling(window=window_size).mean().to_numpy().reshape(-1, 1)
         Rd_medians = self.df['Rd'].rolling(window=window_size).median().to_numpy().reshape(-1, 1)
 
-        return np.hstack([Re_means, Re_medians, Rd_means, Rd_medians])
+        features = np.hstack([Re_means, Re_medians, Rd_means, Rd_medians])
+
+        return features
     
     def cluster_timeseries(self, n_clusters=None, max_clusters = 5, window_size=120):
         """
@@ -262,6 +265,8 @@ class CustomDataframe:
         in get_features(). If n_clusters is not specified, optimal number of clusters is determined automatically.
         """
         features = self.get_features(window_size=window_size)
+
+        length_of_df = len(features)
 
         # Remove rows with NaN values
         features = features[~np.isnan(features).any(axis=1)]
@@ -279,9 +284,13 @@ class CustomDataframe:
         kmeans = KMeans(n_clusters=best_n_clusters, random_state=0)
         labels = kmeans.fit_predict(features_scaled) # Get cluster labels for each window
 
-        self.df['cluster'] = np.nan  # Initialize the cluster column with NaN
-        for i, label in enumerate(labels): # ASSUMES WINDOW ADDS LABEL TO RIGHT EDGE SO FIRST X VALUES ARE LOST
-            self.df.loc[i+window_size-1, 'cluster'] = label  # Label each point in the window
+        # Concatenate the NaNs at the beginning of the original array to make the length of labels match the length of the df
+        nan_array = np.full(length_of_df - len(labels), np.nan) 
+        labels = np.concatenate((nan_array, labels))
+
+        # Add 'cluster' labels back to self.df (order should match the correct indices)
+        self.df['cluster'] = labels
+
 
     def get_fft(self, column, smoothing_window=25, sampling_interval=900): # Sampling interval is determined by the data. 900 seconds means one reading every 15 minutes
         self.smooth_data(column=column, window_size=smoothing_window)
@@ -303,3 +312,30 @@ class CustomDataframe:
         positive_fft_values = np.abs(normalized_fft_values[:N // 2])
 
         return positive_freqs, positive_fft_values
+    
+
+    def get_frequent_values(self, column, bins, threshold_factor=0.2, smoothing_window=None):
+        """
+        Used for determining common distance values that could correspond to a location in the room e.g. bed, desk
+
+        Preferably use a smoothed column.
+
+        threshold_factor: Size of significant peaks relative to the max peak height. Defaults to 20%
+
+        Returns 
+        """
+
+        counts, bin_edges = np.histogram(self.df[column][~np.isnan(self.df[column])], bins=bins)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2 # Average of each of the bin edges
+
+        peaks, properties = find_peaks(counts, height=0) # peaks contains indexes of heights, relative to bin_centers
+        peak_heights = properties["peak_heights"]
+        max_peak_height = peak_heights.max()
+        threshold = max_peak_height * threshold_factor
+
+        sig_peaks_idx = peaks[peak_heights > threshold] # get the sig peak indices, relative to bin_centers
+        sig_peaks_x = bin_centers[sig_peaks_idx] # get the corresponding distances for these peaks (x axis)
+        sig_peaks_heights = peak_heights[peak_heights > threshold]  # their corresponding heights
+
+        return sig_peaks_x, sig_peaks_heights
+

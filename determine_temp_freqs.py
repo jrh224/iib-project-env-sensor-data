@@ -7,6 +7,8 @@ from CustomDataframe import CustomDataframe
 
 sensor_data = CustomDataframe(filename="DataSorted_2024-08-08-09-09__SENS_36DC40metdata_combined.csv")
 
+print(sensor_data.df)
+
 fft_freqs, fft_values = sensor_data.get_fft(column="temp", smoothing_window=25, sampling_interval=900) # temp is external, T is internal
 
 frequency_cutoff = 1 / 43200  # 1 cycle per two days in Hz

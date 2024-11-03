@@ -255,7 +255,13 @@ class CustomDataframe:
         Rd_means = self.df['Rd'].rolling(window=window_size).mean().to_numpy().reshape(-1, 1)
         Rd_medians = self.df['Rd'].rolling(window=window_size).median().to_numpy().reshape(-1, 1)
 
-        features = np.hstack([Re_means, Re_medians, Rd_means, Rd_medians])
+        Me_means = self.df['Me'].rolling(window=window_size).mean().to_numpy().reshape(-1, 1)
+        Me_medians = self.df['Me'].rolling(window=window_size).median().to_numpy().reshape(-1, 1)
+
+        Md_means = self.df['Md'].rolling(window=window_size).mean().to_numpy().reshape(-1, 1)
+        Md_medians = self.df['Md'].rolling(window=window_size).median().to_numpy().reshape(-1, 1)
+
+        features = np.hstack([Re_means, Re_medians, Rd_means, Rd_medians, Me_means, Me_medians, Md_means, Md_medians])
 
         return features
     

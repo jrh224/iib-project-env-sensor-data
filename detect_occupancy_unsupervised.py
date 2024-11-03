@@ -9,8 +9,8 @@ filename = '15s 1week RoomA.csv'
 sensor_data = CustomDataframe(filename=filename)
 
 
-# sensor_data.filter_by_date(start_date='18/01/2024', days=1)
-sensor_data.filter_by_date(days=3)
+sensor_data.filter_by_date(start_date='17/01/2024', days=1)
+# sensor_data.filter_by_date(days=1)
 
 window_size = 120
 
@@ -21,7 +21,7 @@ sensor_data.cluster_timeseries(window_size=window_size, n_clusters=None)
 
 sensor_data.plot_dual(column1="Rd_smoothed", column2="Re_smoothed", ylabel1="Rd smoothed", ylabel2="Re smoothed", show=False)
 
-plt.title("Re and Rd plotted with clusters detected via unsupervised K-means clustering. Features: Re mean, Re median, Rd mean, Rd median")
+plt.title("Re and Rd plotted with clusters detected via unsupervised K-means clustering")
 
 sensor_data.plot_clusters()
 

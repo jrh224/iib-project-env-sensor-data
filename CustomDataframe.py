@@ -138,7 +138,7 @@ class CustomDataframe:
                 plt.bar(x=row['datetime'], height=100, width=timedelta(seconds=15), color=colour_map[row['cluster']], alpha=0.3, align='center')
 
         
-    def smooth_data(self, column, window_size=50, in_place=True):
+    def smooth_data(self, column, window_size=120, in_place=True): # used to default to 50
         # Apply a rolling window to smooth the 'y' values
 
         if in_place:
@@ -318,7 +318,7 @@ class CustomDataframe:
         """
         Used for determining common distance values that could correspond to a location in the room e.g. bed, desk
 
-        Preferably use a smoothed column.
+        Usually column = "Rd"
 
         threshold_factor: Size of significant peaks relative to the max peak height. Defaults to 20%
 

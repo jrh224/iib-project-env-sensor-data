@@ -298,26 +298,33 @@ class CustomDataframe:
         self.df['cluster'] = labels
 
 
-    def get_fft(self, column, smoothing_window=25, sampling_interval=900): # Sampling interval is determined by the data. 900 seconds means one reading every 15 minutes
-        self.smooth_data(column=column, window_size=smoothing_window)
+    def get_fft(self, column, smoothing_window=25, sampling_interval=900, normalize=False): # Sampling interval is determined by the data. 900 seconds means one reading every 15 minutes
+        """
+        Set smoothing_window to None to use raw data
+        Returns: fft_freqs, fft_values
+        """
+        if smoothing_window:
+            self.smooth_data(column=column, window_size=smoothing_window)
+            smoothed_data = self.df[column + "_smoothed"].to_numpy() # first lot of values are set to nan
+            signal = smoothed_data[~np.isnan(smoothed_data)] # Remove NaN values
+        else:
+            signal = self.df[column].to_numpy()
 
-        N = len(self.df["datetime"].to_numpy()) # number of readings
+        zero_mean_smoothed_data = signal - signal.mean() # Remove DC offset
 
-        smoothed_data = self.df[column + "_smoothed"].to_numpy()
-        smoothed_data = smoothed_data[~np.isnan(smoothed_data)] # Remove NaN values
-        zero_mean_smoothed_data = smoothed_data - smoothed_data.mean() # Remove DC offset
+
+        # N = len(self.df["datetime"].to_numpy()) # DON'T DO THIS! SINCE WE LATER CROP THE LENGTH OF THE DATA AFTER SMOOTHING
+
+        N = len(zero_mean_smoothed_data) # Do this instead of above ^
 
         # Apply FFT
-        fft_values = np.fft.fft(zero_mean_smoothed_data)
-        fft_freq = np.fft.fftfreq(N, d=sampling_interval)
+        fft_values = np.fft.rfft(zero_mean_smoothed_data)
+        fft_freqs = np.fft.rfftfreq(N, d=sampling_interval)
 
-        normalized_fft_values = np.abs(fft_values) / N  # Normalize the FFT output by dividing by the number of samples
+        if normalize:
+            fft_values = fft_values / N  # Normalize the FFT output by dividing by the number of samples
 
-        # Only keep the positive frequencies and values (since FFT is symmetric)
-        positive_freqs = fft_freq[:N // 2]
-        positive_fft_values = np.abs(normalized_fft_values[:N // 2])
-
-        return positive_freqs, positive_fft_values
+        return fft_freqs, fft_values
     
 
     def get_frequent_values(self, column, bins, threshold_factor=0.2, smoothing_window=None):

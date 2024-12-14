@@ -29,19 +29,20 @@ plt.ylabel("Amplitude")
 plt.grid(True)
 plt.show()
 
-# # Extract the peak
-# peak_indices = find_peaks(fft_values_mag, height=0.4)[0]
-# peak_freqs = [fft_freqs[i] for i in peak_indices]
-# print(peak_indices)
-# print(peak_freqs)
+# Extract the peak
+peak_indices = find_peaks(fft_values_mag, height=0.4)[0]
+peak_freqs = [fft_freqs[i] for i in peak_indices]
+print(peak_indices)
+print(peak_freqs)
 
-# # Keep only the peak frequencies in the values
-# peak_fft_values = np.zeros_like(fft_values)
-# for i in peak_indices:
-#     peak_fft_values[i] = fft_values[i]
-# reconstructed_signal = np.fft.irfft(filtered_fft_values)
+# Keep only the peak frequencies in the values
+peak_fft_values = np.zeros_like(fft_values)
+for i in peak_indices:
+    peak_fft_values[i] = fft_values[i]
+print(peak_fft_values)
+reconstructed_signal = np.fft.irfft(filtered_fft_values)
 
-reconstructed_signal = np.fft.irfft(fft_values)[:800]
+# reconstructed_signal = np.fft.irfft(fft_values)[:800]
 
 # Create the corresponding time array for plotting
 num_samples = len(reconstructed_signal)
@@ -52,4 +53,5 @@ time_array = time_array[:800]
 # Plot the reconstructed signal
 plt.scatter(time_array, reconstructed_signal, s=10, alpha=0.7, label="Reconstructed temp data")
 sensor_data.filter_by_date(days=7)
-sensor_data.plot(column="temp", show=True, label="Actual temp data")
+# sensor_data.plot(column="temp", show=True, label="Actual temp data")
+plt.show()

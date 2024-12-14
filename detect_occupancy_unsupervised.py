@@ -27,3 +27,5 @@ sensor_data.plot_clusters()
 
 plt.tight_layout()
 plt.show()
+
+sensor_data.plot_dual(column1="Me", ylabel1="Me values", column2="Md", ylabel2="Md values")

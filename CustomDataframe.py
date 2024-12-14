@@ -88,12 +88,12 @@ class CustomDataframe:
         else:
             return CustomDataframe(df=self.df[(self.df['datetime'] >= start_date) & (self.df['datetime'] <= end_date)])
         
-    def plot(self, column, title=None, label=None, xlabel="Time", ylabel="Value", show=True):
+    def plot(self, column, title=None, label=None, xlabel="Time", ylabel="Value", show=True, fontsize=10):
         # Plot the filtered data
         plt.scatter(self.df['datetime'], self.df[column], label=label, s=10, alpha=0.7)
         plt.title(title)
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
+        plt.gca().set_xlabel(xlabel, fontsize=fontsize)
+        plt.gca().set_ylabel(ylabel, fontsize=fontsize)
         plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
         plt.subplots_adjust(right=0.7)
         plt.grid(True)
@@ -178,7 +178,7 @@ class CustomDataframe:
         print(f"Optimal number of clusters: {best_n_clusters}")
         return best_n_clusters
         
-    def get_sig_clusters(self, column, threshold_factor_no_stds=2, max_clusters=10, neg_only=False):
+    def get_sig_clusters(self, column, pos_or_neg='both', threshold_factor_no_stds=2, max_clusters=10):
         """
         Identifies clusters of significantly high values, returning the timestamps of the earliest events in each cluster.
         NB: Used by get_sig_gradients. Usually get_sig_clusters is not called directly.
@@ -187,34 +187,42 @@ class CustomDataframe:
         - `column` (str): The target column to find the clusters of
         - `threshold_factor_no_stds` (float, default=2): Multiplier for the standard deviation to define the threshold for significant negative values.
         - `max_clusters` (int, default=10): Maximum number of clusters to evaluate for optimal clustering.
-        - `neg_only` (bool, default=False): If True, only consider periods of negative gradient i.e. corresponding with window open event
+        - `pos_or_neg` (string, default='both'): Determines whether to return all sig_clusters, or only ones of a certain sign
 
         Returns:
-        - `cluster_beginnings` (pd.Series): Timestamps of the earliest events in each detected cluster, sorted chronologically.
+        - `data_with_clusters` (pd.DataFrame): Contains all the timestamps associated with a high gradient, as well as the cluster it has been assigned to.
         """
         threshold = self.df[column].std() * threshold_factor_no_stds
         # create 2D array of all timestamps of detected event
-        if neg_only:
+        if pos_or_neg == 'both':
+            ungrouped_signif_vals = pd.Series(self.df[abs(self.df[column]) > threshold]['datetime']) # filter df based on abs value being greater than threshold
+        elif pos_or_neg == 'neg':
             ungrouped_signif_vals = pd.Series(self.df[self.df[column] < -threshold]['datetime']) # filter dataframe based on value being negative and bigger mag than threshold
+        elif pos_or_neg == 'pos':
+            ungrouped_signif_vals = pd.Series(self.df[self.df[column] > threshold]['datetime']) # filter df based on abs value being lower than threshold
         else:
-            ungrouped_signif_vals = pd.Series(self.df[abs(self.df['datetime']) > threshold]['datetime']) # filter df based on abs value being greater than threshold
+            raise ValueError("pos_or_neg should take a valid string value")
         ungrouped_data_reshaped = ungrouped_signif_vals.values.reshape(-1, 1)
 
         best_n_clusters = self.get_optimal_clusters(max_clusters=max_clusters, features=ungrouped_data_reshaped)
 
         kmeans = KMeans(best_n_clusters).fit(ungrouped_data_reshaped)
         data_with_clusters = pd.DataFrame({
-            'timestamps': ungrouped_signif_vals,
+            'datetime': ungrouped_signif_vals,
             'cluster': kmeans.labels_,
         })
-        cluster_beginnings = data_with_clusters.groupby('cluster')['timestamps'].min().sort_values()
+       
         # cluster_centers = pd.to_datetime(kmeans.cluster_centers_.flatten())
 
-        return cluster_beginnings
+        return data_with_clusters
+    
             
-    def get_sig_gradients(self, column, smoothing_window=50, threshold_factor_no_stds=2, max_clusters=10):
+    def get_sig_gradients(self, column, smoothing_window=50, threshold_factor_no_stds=2, max_clusters=10, pos_or_neg='both'):
         """
-        Identifies clusters of steep negative gradients in reading data. Returns the timestamps of the earliest events in each cluster.
+        Identifies clusters of steep gradients in reading data. Returns the timestamps of the earliest events in each cluster.
+        
+        Parameters:
+        - `pos_or_neg` (string): Takes one of 'both', 'pos', or 'neg'. Determines whether all clusters are considered, or only positive / negative ones.
 
         Returns:
         - `cluster_beginnings` (pd.Series): Timestamps of the earliest events in each detected cluster, sorted chronologically.
@@ -223,7 +231,9 @@ class CustomDataframe:
         """
         self.smooth_data(column=column, window_size=smoothing_window)
         self.get_gradient(column=(column+'_smoothed'))
-        return self.get_sig_clusters(column=(column+'_smoothed_grad'), threshold_factor_no_stds=threshold_factor_no_stds, max_clusters=max_clusters, neg_only=True)
+        data_with_clusters = self.get_sig_clusters(column=(column+'_smoothed_grad'), threshold_factor_no_stds=threshold_factor_no_stds, max_clusters=max_clusters, pos_or_neg=pos_or_neg)
+        cluster_beginnings = data_with_clusters.groupby('cluster')['datetime'].min().sort_values()
+        return cluster_beginnings
     
 
     def get_occupancy(self):
@@ -351,4 +361,80 @@ class CustomDataframe:
         sig_peaks_heights = peak_heights[peak_heights > threshold]  # their corresponding heights
 
         return sig_peaks_x, sig_peaks_heights
+    
+    def visualise_location_of_temp_responses(self, column, smoothing_window=50, threshold_factor_no_stds=2, max_clusters=10):
+        """
+        Visualise the data values in 'column', plotted along with the clusters' start and end points.
+        """
+        self.smooth_data(column=column, window_size=smoothing_window)
+        self.get_gradient(column=(column+'_smoothed'))
+        grad_column = column+'_smoothed_grad'
+        # Get the positive gradients that might correspond with the heater turning on
+        clustered_grad_temp_data = self.get_sig_clusters(column=grad_column, threshold_factor_no_stds=threshold_factor_no_stds, max_clusters=max_clusters, pos_or_neg='pos')
 
+
+        for i in range(0, clustered_grad_temp_data['cluster'].max()+1):
+            start_of_cluster = clustered_grad_temp_data[(clustered_grad_temp_data['cluster'] == i)]['datetime'].min()
+            end_of_cluster = clustered_grad_temp_data[(clustered_grad_temp_data['cluster'] == i)]['datetime'].max()
+
+            if i == 0:
+                plt.axvline(x=start_of_cluster, color='green', linestyle='--', linewidth=1, label="Start of steep gradient")
+                plt.axvline(x=end_of_cluster, color='red', linestyle='--', linewidth=1, label="End of steep gradient")
+            else:
+                plt.axvline(x=start_of_cluster, color='green', linestyle='--', linewidth=1)
+                plt.axvline(x=end_of_cluster, color='red', linestyle='--', linewidth=1)
+
+        self.plot(column='T_smoothed', ylabel="Smoothed temperature", fontsize=14)
+
+
+
+    def get_temp_response_series(self, column, smoothing_window=50, threshold_factor_no_stds=2, max_clusters=10, min_response_length=40):
+        """
+        Get all of the temperature responses when the heater turns on that meet the min_response_length criteria.
+
+        Returns:
+        - all_responses : An array containing the normalised time series temperature readings for each of the responses
+        
+        NB: the responses are not truncated, and so will likely be of varying lengths
+        """
+        self.smooth_data(column=column, window_size=smoothing_window)
+        self.get_gradient(column=(column+'_smoothed'))
+        grad_column = column+'_smoothed_grad'
+        # Get the positive gradients that might correspond with the heater turning on
+        data_with_clusters = self.get_sig_clusters(column=grad_column, threshold_factor_no_stds=threshold_factor_no_stds, max_clusters=max_clusters, pos_or_neg='pos')
+        # add gradient column to df to allow for future manipulation
+        data_with_clusters = pd.merge(data_with_clusters, self.df, on='datetime', how='left') 
+
+        all_responses = []
+        initial_temps = []
+
+        for i in range(0, data_with_clusters['cluster'].max()+1): # create CustomDataframe object for each response
+            start_of_response = data_with_clusters[(data_with_clusters['cluster'] == i)].loc[data_with_clusters[data_with_clusters['cluster'] == i][grad_column].idxmax()]['datetime']
+            end_of_response = data_with_clusters[(data_with_clusters['cluster'] == i)]['datetime'].max()
+            response = self.filter_by_date(start_date=start_of_response, end_date=end_of_response, in_place=False) # Create response CustomDataframe object
+
+            # Normalize datetime: make it relative to the start
+            response.df['datetime'] = (response.df['datetime'] - start_of_response).dt.total_seconds()
+
+            # Normalize temperature: make it relative to the initial value
+            initial_temperature = response.df.iloc[0][column + '_smoothed']
+            response.df[column+'_smoothed'] = response.df[column + '_smoothed'] - initial_temperature
+
+            response_array = response.df[column+'_smoothed'].to_numpy()
+            if len(response_array) > min_response_length: # 40 readings here is 10 minutes (assuming 15s period)
+                all_responses.append(response.df[column+'_smoothed'].to_numpy()[0:min_response_length])
+                initial_temps.append(initial_temperature) # Add initial temps as well for colour-coding
+
+            # Plot individual responses
+            # response.plot(column=(column+'_smoothed'), ylabel="Normalised temperature", xlabel="Normalised time (starts at max gradient)", show=False)
+        return all_responses, initial_temps
+    
+    def get_avg_temp_response_distrib(self, all_responses):
+        """
+        Get mean and standard deviation of all_responses.
+        """
+        # Calculate mean and std of response (to get distribution over responses)
+        mean_response = np.mean(all_responses, axis=0)
+        std_response = np.std(all_responses, axis=0)
+        return mean_response, std_response
+        

@@ -88,7 +88,7 @@ class CustomDataframe:
         else:
             return CustomDataframe(df=self.df[(self.df['datetime'] >= start_date) & (self.df['datetime'] <= end_date)])
         
-    def plot(self, column, title=None, label=None, xlabel="Time", ylabel="Value", show=True, fontsize=10):
+    def plot(self, column, title=None, label=None, xlabel="Time", ylabel="Value", show=True, fontsize=12):
         # Plot the filtered data
         plt.scatter(self.df['datetime'], self.df[column], label=label, s=10, alpha=0.7)
         plt.title(title)
@@ -388,7 +388,7 @@ class CustomDataframe:
 
 
 
-    def get_temp_response_series(self, column, smoothing_window=50, threshold_factor_no_stds=2, max_clusters=10, min_response_length=40):
+    def get_temp_response_series(self, column, smoothing_window=50, threshold_factor_no_stds=2, max_clusters=10, min_response_length=40, plot_responses=False, pos_or_neg='pos'):
         """
         Get all of the temperature responses when the heater turns on that meet the min_response_length criteria.
 
@@ -400,8 +400,8 @@ class CustomDataframe:
         self.smooth_data(column=column, window_size=smoothing_window)
         self.get_gradient(column=(column+'_smoothed'))
         grad_column = column+'_smoothed_grad'
-        # Get the positive gradients that might correspond with the heater turning on
-        data_with_clusters = self.get_sig_clusters(column=grad_column, threshold_factor_no_stds=threshold_factor_no_stds, max_clusters=max_clusters, pos_or_neg='pos')
+        # Get the (positive) gradients that might correspond with the heater turning on/off
+        data_with_clusters = self.get_sig_clusters(column=grad_column, threshold_factor_no_stds=threshold_factor_no_stds, max_clusters=max_clusters, pos_or_neg=pos_or_neg)
         # add gradient column to df to allow for future manipulation
         data_with_clusters = pd.merge(data_with_clusters, self.df, on='datetime', how='left') 
 
@@ -425,8 +425,9 @@ class CustomDataframe:
                 all_responses.append(response.df[column+'_smoothed'].to_numpy()[0:min_response_length])
                 initial_temps.append(initial_temperature) # Add initial temps as well for colour-coding
 
+            if plot_responses:
             # Plot individual responses
-            # response.plot(column=(column+'_smoothed'), ylabel="Normalised temperature", xlabel="Normalised time (starts at max gradient)", show=False)
+                response.plot(column=(column+'_smoothed'), ylabel="Normalised temperature", xlabel="Normalised time (starts at max gradient)", show=False)
         return all_responses, initial_temps
     
     def get_avg_temp_response_distrib(self, all_responses):
@@ -438,3 +439,61 @@ class CustomDataframe:
         std_response = np.std(all_responses, axis=0)
         return mean_response, std_response
         
+    def get_temp_curves_for_training(self, column, pos_or_neg, max_exceptions, response_duration, smoothing_window=50, plot_sequences=False):
+        """
+        Returns an array of arrays, each subarray containing a pair of timestamps.
+        e.g. [[19/12/24 13:00, 19/12/24 17:00], [19/12/24 21:00, 20/12/24 2:00]]
+        These timestamps are the start and end points of temperature decay / increase curves.
+        There are defined as places where the smoothed gradient of the temperature readings is consistently negative/positive.
+        Used to get training data for RNN to characterise a room's heating/cooling curvess.
+
+        See 15_dec_rnn.py for use case.
+        """
+        self.smooth_data(column=column, window_size=smoothing_window)
+        self.get_gradient(column=(column+'_smoothed'))
+        grad_column = column+'_smoothed_grad'
+
+        all_sequences = []
+        current_sequence = []
+        exception_count = 0
+        for _, row in self.df.iterrows(): # Iterate through all the rows (readings)
+            if pd.notna(row[grad_column]): # Ignore rows that don't have a smoothed temperature reading in them (there will be 50 initial rows that are not included if smoothing_window = 50
+                if len(current_sequence) == 0:
+                    current_sequence = [row['datetime'], row['datetime']] # initialise the sequence to start with
+
+                if exception_count > max_exceptions: # If the gradient has substantially changed, then reset the current sequence
+                    # duration_of_sequence = current_sequence[1] - current_sequence[0]
+                    # duration_of_sequence = duration_of_sequence.total_seconds()
+                    # if duration_of_sequence == response_duration:
+                    #     all_sequences.append(current_sequence)
+                    current_sequence = [row['datetime'], row['datetime']] # reset the current seuquence
+
+                if (pos_or_neg == 'pos' and row[grad_column] >= 0) or (pos_or_neg == 'neg' and row[grad_column] <= 0):
+                    # exception_count = 0 # TBC: at the moment we just reset the count, but could maybe decrement instead?
+                    exception_count -= 1 if exception_count > -max_exceptions else 0 # decrement the counter
+                    current_sequence[1] = row['datetime'] # extend the current sequence
+                    duration_of_sequence = current_sequence[1] - current_sequence[0]
+                    duration_of_sequence = duration_of_sequence.total_seconds()
+                    if duration_of_sequence >= response_duration:
+                        all_sequences.append(current_sequence)
+                        current_sequence = [row['datetime'], row['datetime']] # reset the current seuquence
+                else:
+                    exception_count += 1
+        
+        if plot_sequences:
+            i = 0
+            self.plot(column='T_smoothed', show=False, ylabel="Temperature (smoothed) C")
+            for sequence in all_sequences:
+                if i == 0:
+                    plt.axvline(x=sequence[0], color='green', linestyle='--', linewidth=1, label="Start of curve")
+                    plt.axvline(x=sequence[1], color='red', linestyle='--', linewidth=1, label="End of curve")
+                    i += 1
+                else:
+                    plt.axvline(x=sequence[0], color='green', linestyle='--', linewidth=1)
+                    plt.axvline(x=sequence[1], color='red', linestyle='--', linewidth=1)
+            plt.legend()
+            plt.show()
+
+        return all_sequences
+
+

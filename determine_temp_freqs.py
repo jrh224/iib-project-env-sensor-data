@@ -3,7 +3,7 @@
 
 from matplotlib import pyplot as plt
 import numpy as np
-from CustomDataframe import CustomDataframe
+from utils.CustomDataframe import CustomDataframe
 
 # sensor_data = CustomDataframe(filename="DataSorted_2024-08-08-09-09__SENS_36DC40metdata_combined.csv")
 sensor_data = CustomDataframe(filename='15s 1week RoomA.csv')

@@ -4,14 +4,14 @@
 import numpy as np
 import pandas as pd
 from datetime import datetime
-from CustomDataframe import CustomDataframe
+from utils.CustomDataframe import CustomDataframe
 from matplotlib import pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 
-from openmeteocustom import get_external_temp
+from utils.openmeteocustom import get_external_temp
 
 sensor_data = CustomDataframe(filename='wadham college/2024-11-30-12-31_influxdb_data-90ec.csv') # room HC/2
 

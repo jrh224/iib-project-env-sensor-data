@@ -5,7 +5,7 @@
 from matplotlib import pyplot as plt
 import numpy as np
 from scipy.signal import find_peaks
-from CustomDataframe import CustomDataframe
+from utils.CustomDataframe import CustomDataframe
 
 
 filename = '15s 1week RoomA.csv'

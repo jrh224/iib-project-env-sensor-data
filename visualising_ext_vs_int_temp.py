@@ -1,7 +1,7 @@
 ## 9th Oct: Investigating the external weather data sent to me by Tash
 
 from matplotlib import pyplot as plt
-from CustomDataframe import CustomDataframe
+from utils.CustomDataframe import CustomDataframe
 
 combinedData = CustomDataframe(filename="DataSorted_2024-08-08-09-09__SENS_36DC40metdata_combined.csv")
 

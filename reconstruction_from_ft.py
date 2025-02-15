@@ -1,7 +1,7 @@
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
-from CustomDataframe import CustomDataframe
+from utils.CustomDataframe import CustomDataframe
 from scipy.signal import find_peaks
 
 sensor_data = CustomDataframe(filename="DataSorted_2024-08-08-09-09__SENS_36DC40metdata_combined.csv")

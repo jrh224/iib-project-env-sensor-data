@@ -1,7 +1,7 @@
 # 26th November - First algorithm for pulling out responses and 
 
 import numpy as np
-from CustomDataframe import CustomDataframe
+from utils.CustomDataframe import CustomDataframe
 from matplotlib import pyplot as plt
 
 filename = '15s 1week RoomA.csv'

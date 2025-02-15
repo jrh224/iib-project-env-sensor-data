@@ -2,7 +2,7 @@
 ## Design a manual algorithm get_occupancy()
 
 from matplotlib import pyplot as plt
-from CustomDataframe import CustomDataframe
+from utils.CustomDataframe import CustomDataframe
 
 filename = '15s 1week RoomA.csv'
 sensor_data = CustomDataframe(filename=filename)

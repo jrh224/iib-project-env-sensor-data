@@ -1,7 +1,7 @@
 ## 9th Oct: Plots e.g. temperature data, raw
 
 from matplotlib import pyplot as plt
-from CustomDataframe import CustomDataframe
+from utils.CustomDataframe import CustomDataframe
 
 sensor_data = CustomDataframe(filename='wadham college/2024-11-30-12-31_influxdb_data-90ec.csv')
 

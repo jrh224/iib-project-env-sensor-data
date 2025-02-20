@@ -58,6 +58,7 @@ def get_external_temp(start_date, end_date, lat, long):
 
 	hourly_dataframe = pd.DataFrame(data = hourly_data)
 	hourly_dataframe['date'] = pd.to_datetime(hourly_dataframe['date'])  # Convert date column to datetime
+	hourly_dataframe.set_index('date', inplace=True)
 
 	return hourly_dataframe
 

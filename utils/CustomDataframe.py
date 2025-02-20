@@ -501,7 +501,7 @@ class CustomDataframe:
         return all_sequences
 
 
-    def add_ext_temp_column(self, lat, long, measurement_period='15s'):
+    def add_ext_temp_column(self, lat, long):
         """
         Add a new column to dataframe with the external temperatures between the time stamps.
         Automatically determines the start_date and end_date based on the min and max date stamps.
@@ -511,28 +511,29 @@ class CustomDataframe:
         NB: Assumes that readings start from exactly on the hour
         """
 
-        start_date = self.df['datetime'].min()
+        start_date = self.df.index.min()
         start_date = start_date.replace(second=0, microsecond=0, minute=0) # round back to prev hour
-        end_date = self.df['datetime'].max()
+        end_date = self.df.index.max()
         end_date = end_date.replace(second=0, microsecond=0, minute=0, hour=end_date.hour+1) # round up to next hour
 
         hourly_extT_dataframe = get_external_temp(start_date, end_date, lat, long)
 
-        new_time_index = pd.date_range(start=start_date, end=end_date, freq=measurement_period)  # 15-second intervals
-        new_temp_df = pd.DataFrame(new_time_index, columns=["datetime"])
+        measurement_period = self.df.index.freq
 
-        new_temp_df = pd.merge(new_temp_df, hourly_extT_dataframe, left_on='datetime', right_on='date', how='left')
-        new_temp_df = new_temp_df.drop('date', axis=1)
+        new_time_index = pd.date_range(start=start_date, end=end_date, freq=measurement_period)  # 15-second intervals
+        new_temp_df = pd.DataFrame(index=new_time_index)
+
+        new_temp_df = new_temp_df.merge(hourly_extT_dataframe, left_index=True, right_index=True, how="left")
 
         # Perform linear interpolation to fill missing temperature values
         new_temp_df['temperature_2m'] = new_temp_df['temperature_2m'].interpolate(method='linear')
 
-        self.df = pd.merge(self.df, new_temp_df, left_on="datetime", right_on="datetime", how="left")
+        self.df = pd.merge(self.df, new_temp_df, left_index=True, right_index=True, how="left")
 
-    def add_sunrise_sunset_column(self, lat, long, measurement_period='15s'):
-        start_date = self.df['datetime'].min()
+    def add_sunrise_sunset_column(self, lat, long):
+        start_date = self.df.index.min()
         start_date = start_date.replace(second=0, microsecond=0, minute=0) # round back to prev hour
-        end_date = self.df['datetime'].max()
+        end_date = self.df.index.max()
         end_date = end_date.replace(second=0, microsecond=0, minute=0, hour=end_date.hour+1) # round up to next hour
 
         daily_suntimes_df = get_sunrise_sunset(start_date=start_date, end_date=end_date, lat=lat, long=long)
@@ -541,15 +542,19 @@ class CustomDataframe:
         daily_suntimes_df['sunset'] = daily_suntimes_df['sunset'].dt.tz_localize('UTC')
 
         # Extract the date part from the timestamps
-        self.df['date'] = self.df['datetime'].dt.floor('D')
+        self.df['date'] = self.df.index.floor('D')
         daily_suntimes_df['date'] = daily_suntimes_df['date'].dt.floor('D')
 
         # Merge the dataframes on the date
+        # Reset index to move datetime into a regular column
+        self.df.reset_index(inplace=True)
         self.df = self.df.merge(daily_suntimes_df, on='date', how='left')
+        # Reset the index to datetime
+        self.df.set_index('datetime', inplace=True)
 
         # Check if the timestamp is between sunrise and sunset
         self.df['daylight'] = self.df.apply(
-            lambda row: 1 if row['sunrise'] <= row['datetime'] <= row['sunset'] else 0, axis=1
+            lambda row: 1 if row['sunrise'] <= row.name <= row['sunset'] else 0, axis=1
         )
 
         # Drop the extra columns
@@ -565,19 +570,39 @@ class CustomDataframe:
     def create_pytorch_matrix(self, lat, long):
         # Add external temperature to sensor_data object
         self.add_ext_temp_column(lat=lat, long=long)
-        self.interpolate_missing_rows()
         # Add sunrise and sunset column (ensure this is done AFTER interpolation, since it is binary 0-1)
         self.add_sunrise_sunset_column(lat=lat, long=long)
 
-        # self.smooth_data(column="T", window_size=5)
-        # self.df.dropna(inplace=True)
-
-        # iat = self.df["T_smoothed"].to_numpy().reshape(-1, 1) # change back
         iat = self.df["T"].to_numpy().reshape(-1, 1)
         eat = self.df["temperature_2m"].to_numpy().reshape(-1, 1)
         control = self.df["C"].to_numpy().reshape(-1, 1)
         re = self.df["Re"].to_numpy().reshape(-1, 1)
         daylight = self.df["daylight"].to_numpy().reshape(-1, 1)
 
-        matrix = np.hstack((iat, eat, control, re, daylight))
+        # Now to add sin/cos time encoding
+        # Compute time fraction of the 24-hour cycle
+        # Convert to hours, minutes, and seconds
+        times = self.df.index.to_numpy(dtype="datetime64[s]")
+        hours = np.array([t.astype("datetime64[h]").astype(int) % 24 for t in times])
+        minutes = np.array([t.astype("datetime64[m]").astype(int) % 60 for t in times])
+        seconds = np.array([t.astype("datetime64[s]").astype(int) % 60 for t in times])
+        # Compute the time fraction of a 24-hour cycle
+        time_fraction = (hours + minutes / 60 + seconds / 3600) / 24
+
+        # Compute sine and cosine encoding
+        sin_24hr = np.sin(2 * np.pi * time_fraction).reshape(-1, 1)
+        cos_24hr = np.cos(2 * np.pi * time_fraction).reshape(-1, 1)
+
+        matrix = np.hstack((iat, eat, control, re, daylight, sin_24hr, cos_24hr))
         return matrix
+    
+    def resample(self, freq='5Min'):
+        self.df.set_index('datetime', inplace=True)
+        self.df = self.df.resample(freq, label="right").agg({
+            "T": "mean",
+            "C": "mean", # Could use last? not sure
+            "Re": "mean",
+            "H": "mean",
+            "Dd": "mean",
+            "Lux": "mean"
+        })

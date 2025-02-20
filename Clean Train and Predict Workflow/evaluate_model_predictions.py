@@ -1,22 +1,28 @@
 import sys
 import os
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning) # temporary to avoid DeprecationWarning: __array__ implementation doesn't accept a copy keyword, so passing copy=False failed. __array__ must implement 'dtype' and 'copy' keyword arguments.
+
 from matplotlib import pyplot as plt
-# Add the parent directory of 'my_package' to sys.path
+# Add the parent directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import joblib
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 import torch
 import config
-from models import LSTMModel
+from models import LSTMModel, Seq2SeqLSTM
 from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
 
 
 # Import sensor data into CustomDataframe object
-sensor_data = CustomDataframe(filename=config.TEST_FILENAME) # NB: change back to FILENAME if all in same file
-sensor_data_test = sensor_data.filter_by_date(start_date=config.start_date_test, end_date=config.end_date_test, in_place=False)
+sensor_data = CustomDataframe(filename=config.FILENAME) # NB: change back to FILENAME if all in same file
+sensor_data_test = sensor_data.filter_by_date(start_date=config.start_date_train, end_date=config.end_date_train, in_place=False)
+
+sensor_data_test.interpolate_missing_rows()
+sensor_data_test.resample()
 
 test_matrix = sensor_data_test.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
 
@@ -26,7 +32,7 @@ for i in range(test_matrix.shape[1]): # for each feature column
     test_matrix[:, i] = scaler.transform(test_matrix[:, i].reshape(-1, 1)).flatten() # scale one column at a time
 
 # Initialise the model for prediction
-model = LSTMModel()
+model = Seq2SeqLSTM()
 model.load_state_dict(torch.load(config.PREDICT_MODEL, weights_only=True))
 
 # Pass through train dataset, predicting one hour every half hour
@@ -37,24 +43,56 @@ predict_from_i = 0 # start from beginning of test set
 df_length = sensor_data_test.df.shape[0]
 rmse_values = []
 
-while predict_from_i < df_length - config.NUM_PREDICTIONS - config.LOOKBACK:
+y_predictions = []
+y_actuals = []
+
+model.eval()
+
+while predict_from_i < df_length - config.LOOKBACK - config.OUTPUT_SIZE:
     # Perform predictions
-    predictions = autoregressive_predict(model, test_matrix, num_predictions=config.NUM_PREDICTIONS, start_point=predict_from_i)
+    # predictions = autoregressive_predict(model, test_matrix, num_predictions=config.NUM_PREDICTIONS, start_point=predict_from_i)
+    
+    current_lookback = test_matrix[predict_from_i:config.LOOKBACK+predict_from_i]
+    input_tensor = torch.tensor(current_lookback, dtype=torch.float32).unsqueeze(0)
+    # Make prediction
+    with torch.no_grad():
+        predictions = model(input_tensor)
+
     # Inverse transform predictions to get correct scale
     y_prediction = scalers[0].inverse_transform(np.array(predictions).reshape(-1, 1))
     # Get actual IAT readings
-    y_actual = sensor_data_test.df.iloc[predict_from_i:config.LOOKBACK + config.NUM_PREDICTIONS + predict_from_i]["T"].to_numpy()
-    rmse_values.append(np.sqrt(np.mean(y_actual - y_prediction) ** 2))
+    y_actual = test_matrix[predict_from_i+config.LOOKBACK:predict_from_i+config.LOOKBACK+config.OUTPUT_SIZE, 0]
+    y_actual = scalers[0].inverse_transform(np.array(y_actual).reshape(-1, 1))
+
+    # Store y_prediction and y_actual for evaluation later on
+    y_predictions.extend(np.array(y_prediction).reshape(-1).flatten())
+    y_actuals.extend(np.array(y_actual).reshape(-1).flatten())
 
     # plt.clf()
-    # x_actual = sensor_data_test.df.iloc[predict_from_i:config.LOOKBACK + len(predictions) + predict_from_i]['datetime'].to_numpy()
-    # x_prediction = sensor_data_test.df.iloc[config.LOOKBACK + predict_from_i:config.LOOKBACK + len(predictions) + predict_from_i]['datetime'].to_numpy()
+    # # Ensure x_actual and x_prediction have correct shape
+    # x_actual = sensor_data_test.df.iloc[predict_from_i+config.LOOKBACK:predict_from_i + config.LOOKBACK + len(y_prediction)].index.to_numpy()
+    # x_prediction = sensor_data_test.df.iloc[predict_from_i + config.LOOKBACK:predict_from_i + config.LOOKBACK + len(y_prediction)].index.to_numpy()
+
     # plt.plot(x_actual, y_actual, label='Actual Temperature', color="blue", linestyle="-", marker="o")
     # plt.plot(x_prediction, y_prediction, label='Autoregressive Predictions', color="red", linestyle="--", marker="x")
+    # plt.xlabel("Time")
+    # plt.ylabel("Temperature C")
+    # plt.legend()
     # plt.show()
 
-    predict_from_i += 120 # Add half an hour each time
+    # predict_from_i += 120 # Add half an hour each time
+    predict_from_i += 6
 
-rmse_values = np.array(rmse_values)
-overall_rmse = np.sqrt(np.mean(rmse_values**2))
-print("Overall RMSE:", overall_rmse)
+y_actuals = np.array(y_actuals)
+y_predictions = np.array(y_predictions)
+
+# Calculate MAE and R2 from y_prediction and y_actual
+rmse = np.sqrt(np.mean((y_actuals - y_predictions) ** 2))
+
+mae = np.mean(np.abs(y_actuals - y_predictions))
+y_mean = np.mean(y_actuals)
+r2 = 1 - np.sum((y_actuals - y_predictions)**2) / np.sum((y_actuals - y_mean)**2)
+
+print("MAE (mean absolute error): " + str(mae))
+print("R2 (coefficient of determination): " + str(r2))
+print("RMSE: " + str(rmse))

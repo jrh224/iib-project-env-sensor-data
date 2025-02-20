@@ -3,7 +3,7 @@ import pandas as pd
 # Configuration
 LOOKBACK = 288 # 288 = 24 hrs / 5 min timesteps
 INPUT_SIZE = 7 # int tempt, ext temp, heating control, re, daylight, sin24hr, cos24hr
-OUTPUT_SIZE = 1 # 12 * 5 min = 1 hour of predictions
+OUTPUT_SIZE = 12 # 12 * 5 min = 1 hour of predictions
 BATCH_SIZE = 32
 HIDDEN_SIZE = 512
 LEARNING_RATE = 0.002
@@ -13,7 +13,7 @@ TRAIN_SPLIT = 0.8
 EARLY_STOPPING_PATIENCE = 5
 
 # Model to use for prediction
-PREDICT_MODEL = '15feb1757.pth'
+PREDICT_MODEL = '15feb1833.pth'
 NUM_PREDICTIONS = 240
 PREDICT_FROM = pd.to_datetime("2024/11/14 00:00:00").tz_localize('UTC') # Start date
 

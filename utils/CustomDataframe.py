@@ -567,6 +567,22 @@ class CustomDataframe:
         self.df = self.df.interpolate(method="linear")
         self.df = self.df.reset_index()
 
+    def add_24hr_encoding(self):
+        # Convert to hours, minutes, and seconds
+        times = self.df.index.to_numpy(dtype="datetime64[s]")
+        hours = np.array([t.astype("datetime64[h]").astype(int) % 24 for t in times])
+        minutes = np.array([t.astype("datetime64[m]").astype(int) % 60 for t in times])
+        seconds = np.array([t.astype("datetime64[s]").astype(int) % 60 for t in times])
+        # Compute the time fraction of a 24-hour cycle
+        time_fraction = (hours + minutes / 60 + seconds / 3600) / 24
+        # Compute sine and cosine encoding
+        sin_24hr = np.sin(2 * np.pi * time_fraction).reshape(-1, 1)
+        cos_24hr = np.cos(2 * np.pi * time_fraction).reshape(-1, 1)
+        self.df['sin24hr'] = sin_24hr
+        self.df['cos24hr'] = cos_24hr
+
+
+
     def create_pytorch_matrix(self, lat, long):
         # Add external temperature to sensor_data object
         self.add_ext_temp_column(lat=lat, long=long)

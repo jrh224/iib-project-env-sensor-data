@@ -21,15 +21,15 @@ sensor_data = CustomDataframe(filename=config.TEST_FILENAME) # NB: change back t
 sensor_data_test = sensor_data.filter_by_date(start_date=config.start_date_test, end_date=config.end_date_test, in_place=False)
 
 sensor_data_test.interpolate_missing_rows()
-sensor_data_test.resample() # Also reindexes df
+sensor_data_test.resample(freq='15s') # Also reindexes df
 
 test_matrix = sensor_data_test.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
 
 # Get the starting point for the predictions
 predict_from_i = sensor_data_test.df.index.get_loc(sensor_data_test.df.index[sensor_data_test.df.index > config.PREDICT_FROM][0])
-# TEST: Force control to be 100
-forced_control = np.full(test_matrix[predict_from_i:, 2].shape, float(100))
-test_matrix[predict_from_i:, 2] = forced_control
+# # TEST: Force control to be 100
+# forced_control = np.full(test_matrix[predict_from_i:, 2].shape, float(100))
+# test_matrix[predict_from_i:, 2] = forced_control
 
 scalers = joblib.load('scalers.gz') # Load up the previously trained scalers
 for i in range(test_matrix.shape[1]): # for each feature column

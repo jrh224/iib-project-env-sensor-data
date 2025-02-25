@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import config
 
-def create_sequences(data, lookback, predictforward, target_col=0):
+def create_sequences(data, lookback, predictforward, step=1, target_col=0):
     """
     Data should be of shape (# timestamps, # features)
     """
@@ -12,7 +12,7 @@ def create_sequences(data, lookback, predictforward, target_col=0):
     #     sequences.append(data[i:i+lookback])
     #     targets.append(data[i+lookback, target_col]) # only add the internal temperature to the y vector
     
-    for i in range(len(data) - lookback - predictforward):
+    for i in range(0, len(data) - lookback - predictforward, step):
         sequences.append(data[i:i+lookback])
         targets.append(data[i+lookback:i+lookback+predictforward, target_col])
 

@@ -22,7 +22,7 @@ sensor_data = CustomDataframe(filename=config.FILENAME) # NB: change back to FIL
 sensor_data_test = sensor_data.filter_by_date(start_date=config.start_date_train, end_date=config.end_date_train, in_place=False)
 
 sensor_data_test.interpolate_missing_rows()
-sensor_data_test.resample()
+sensor_data_test.resample(freq='15s')
 
 test_matrix = sensor_data_test.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
 
@@ -81,7 +81,7 @@ while predict_from_i < df_length - config.LOOKBACK - config.OUTPUT_SIZE:
     # plt.show()
 
     # predict_from_i += 120 # Add half an hour each time
-    predict_from_i += 6
+    predict_from_i += config.SEQ_STEP
 
 y_actuals = np.array(y_actuals)
 y_predictions = np.array(y_predictions)

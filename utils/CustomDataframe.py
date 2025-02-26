@@ -90,9 +90,56 @@ class CustomDataframe:
         else:
             return CustomDataframe(df=self.df[(self.df['datetime'] >= start_date) & (self.df['datetime'] <= end_date)])
         
+    def filter_by_date_ranges(self, dates, in_place=True):
+        """
+        Pass in dates in the following format: 
+        [
+        ("2024-11-24 00:00:15", "2024-11-30 00:00:00"),
+        ("2024-12-10 00:00:15", "2025-01-15 00:00:00"),
+        ("2025-01-24 00:00:15", "2025-02-14 00:00:00")
+        ]
+        NB: Strings may be pd.datetime objects 
+
+        Also returns idx_blocks, which represents the indices of the ends of each continuous block (inclusive)
+        e.g. [(0, 1727), (1728, 3167), (3168, 4895)]
+        """
+        # First convert all dates to pd.datetime objects just in case
+        dates_dt = []
+        for i in range(len(dates)):
+            dates_dt.append((pd.to_datetime(dates[i][0]).tz_localize("UTC"), pd.to_datetime(dates[i][1]).tz_localize("UTC")))
+
+        # # Set datetime to be the index
+        # self.df.set_index("datetime", inplace=True)
+
+        # Initialize boolean mask as a Pandas Series
+        mask = pd.Series(False, index=self.df.index)
+
+        # Apply each date range
+        for start, end in dates_dt:
+            mask |= (self.df.index >= start) & (self.df.index <= end)  # Accumulate using OR (|)
+
+        # Convert to boolean if needed
+        mask = mask.astype(bool)
+
+        filtered_df = self.df.loc[mask]
+
+        # Return the indices that correspond to continuous blocks
+        idx_blocks = []
+        filtered_indices = filtered_df.index.to_numpy()
+        for block in dates_dt:
+            # Attention: defined such that the end indices of a block are inclusive
+            idx_blocks.append((np.where(filtered_indices >= block[0])[0][0], np.where(filtered_indices <= block[1])[0][-1]))
+
+        if not in_place:
+            return CustomDataframe(df=filtered_df), idx_blocks
+        
+        self.df = filtered_df
+        return None, idx_blocks
+    
+        
     def plot(self, column, title=None, label=None, xlabel="Time", ylabel="Value", show=True, fontsize=12):
         # Plot the filtered data
-        plt.scatter(self.df['datetime'], self.df[column], label=label, s=10, alpha=0.7)
+        plt.scatter(self.df.index, self.df[column], label=label, s=10, alpha=0.7)
         plt.title(title)
         plt.gca().set_xlabel(xlabel, fontsize=fontsize)
         plt.gca().set_ylabel(ylabel, fontsize=fontsize)
@@ -584,10 +631,10 @@ class CustomDataframe:
 
 
     def create_pytorch_matrix(self, lat, long):
-        # Add external temperature to sensor_data object
-        self.add_ext_temp_column(lat=lat, long=long)
-        # Add sunrise and sunset column (ensure this is done AFTER interpolation, since it is binary 0-1)
-        self.add_sunrise_sunset_column(lat=lat, long=long)
+        # # Add external temperature to sensor_data object
+        # self.add_ext_temp_column(lat=lat, long=long)
+        # # Add sunrise and sunset column (ensure this is done AFTER interpolation, since it is binary 0-1)
+        # self.add_sunrise_sunset_column(lat=lat, long=long)
 
         iat = self.df["T"].to_numpy().reshape(-1, 1)
         eat = self.df["temperature_2m"].to_numpy().reshape(-1, 1)
@@ -614,11 +661,17 @@ class CustomDataframe:
     
     def resample(self, freq='5Min'):
         self.df.set_index('datetime', inplace=True)
+        # self.df = self.df.resample(freq, label="right").agg({
+        #     "T": "mean",
+        #     "C": "mean", # Could use last? not sure
+        #     "Re": "mean",
+        #     "H": "mean",
+        #     "Dd": "mean",
+        #     "Lux": "mean"
+        # })
         self.df = self.df.resample(freq, label="right").agg({
             "T": "mean",
             "C": "mean", # Could use last? not sure
             "Re": "mean",
-            "H": "mean",
-            "Dd": "mean",
             "Lux": "mean"
         })

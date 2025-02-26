@@ -17,16 +17,26 @@ from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
 
 # Import sensor data into CustomDataframe object
-sensor_data = CustomDataframe(filename=config.TEST_FILENAME) # NB: change back to FILENAME if all in same file
-sensor_data_test = sensor_data.filter_by_date(start_date=config.start_date_test, end_date=config.end_date_test, in_place=False)
+sensor_data = CustomDataframe(filename=config.FILENAME) # NB: change back to FILENAME if all in same file
 
-sensor_data_test.interpolate_missing_rows()
-sensor_data_test.resample(freq='15s') # Also reindexes df
+sensor_data.interpolate_missing_rows()
+sensor_data.resample(freq='5Min')
+
+# Add external temperature to sensor_data object
+sensor_data.add_ext_temp_column(lat=config.LAT, long=config.LONG)
+# Add sunrise and sunset column (ensure this is done AFTER interpolation, since it is binary 0-1)
+sensor_data.add_sunrise_sunset_column(lat=config.LAT, long=config.LONG)
+
+sensor_data_test, idx_blocks_test = sensor_data.filter_by_date_ranges(dates=config.TEST_RANGE, in_place=False)
 
 test_matrix = sensor_data_test.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
+print(f"Test Matrix Created Successfully [Shape: {test_matrix.shape}]")
 
 # Get the starting point for the predictions
-predict_from_i = sensor_data_test.df.index.get_loc(sensor_data_test.df.index[sensor_data_test.df.index > config.PREDICT_FROM][0])
+predict_from_i = sensor_data_test.df.index.get_loc(sensor_data_test.df.index[sensor_data_test.df.index >= config.PREDICT_FROM][0])
+print("Predict_from_i: " + str(predict_from_i))
+print("First Prediction Timestamp:", sensor_data_test.df.index[predict_from_i])
+print("Expected Start Timestamp:", config.PREDICT_FROM)
 # # TEST: Force control to be 100
 # forced_control = np.full(test_matrix[predict_from_i:, 2].shape, float(100))
 # test_matrix[predict_from_i:, 2] = forced_control
@@ -42,19 +52,27 @@ model.load_state_dict(torch.load(config.PREDICT_MODEL, weights_only=True))
 
 # Perform predictions
 model.eval()
-current_lookback = test_matrix[predict_from_i:config.LOOKBACK+predict_from_i]
+X_test, y_test = create_sequences(test_matrix, lookback=config.LOOKBACK, predictforward=config.OUTPUT_SIZE, step=config.SEQ_STEP, target_col=0, blocks=idx_blocks_test)
+current_lookback = X_test[predict_from_i] # TRY CHANGING THIS!!
+print(np.array(current_lookback).shape) # (156, 7)
+
 input_tensor = torch.tensor(current_lookback, dtype=torch.float32).unsqueeze(0)
 with torch.no_grad():
     predictions = model(input_tensor)
 
 # Inverse transform predictions to get correct scale
 y_prediction = scalers[0].inverse_transform(np.array(predictions).reshape(-1, 1))
+print(y_prediction)
+y_real_temp = scalers[0].inverse_transform(np.array(y_test[0]).reshape(-1, 1))
+print(y_real_temp)
 
 # Create timestamps
-x_prediction = sensor_data_test.df.iloc[predict_from_i+config.LOOKBACK:predict_from_i+config.LOOKBACK+predictions.shape[1]].index.to_numpy().reshape(-1, 1)
-x_actual = sensor_data_test.df.iloc[predict_from_i:config.LOOKBACK + predictions.shape[1] + predict_from_i].index.to_numpy()
+x_prediction = sensor_data_test.df.iloc[predict_from_i+config.LOOKBACK:predict_from_i+config.LOOKBACK+predictions.shape[1]].index.to_numpy()
+x_actual = sensor_data_test.df.iloc[predict_from_i:predict_from_i + config.LOOKBACK + predictions.shape[1]].index.to_numpy()
 # Get actual IAT readings
-y_actual = sensor_data_test.df.iloc[predict_from_i:config.LOOKBACK + predictions.shape[1] + predict_from_i]["T"].to_numpy()
+y_actual = sensor_data_test.df.iloc[predict_from_i:predict_from_i + config.LOOKBACK + predictions.shape[1]]["T"].to_numpy()
+
+
 
 plt.plot(x_actual, y_actual, label='Actual Temperature', color="blue", linestyle="-", marker="o")
 plt.plot(x_prediction, y_prediction, label='Autoregressive Predictions', color="red", linestyle="--", marker="x")

@@ -2,21 +2,88 @@ import numpy as np
 import torch
 import config
 
-def create_sequences(data, lookback, predictforward, step=1, target_col=0):
+def create_sequences_with_future(data, lookback, predictforward, step=1, target_col=0, blocks=None):
     """
-    Data should be of shape (# timestamps, # features)
+    Data should be of shape (# timestamps, # features). (e.g. train_matrix)
+
+    If blocks is provided, it should be in the following format:
+    blocks = [
+    (0, 23),
+    (30, 79),
+    (100, 105)
+    ]
+    i.e. both sides 
     """
+
     sequences = []
     targets = []
-    # for i in range(len(data) - lookback):
-    #     sequences.append(data[i:i+lookback])
-    #     targets.append(data[i+lookback, target_col]) # only add the internal temperature to the y vector
-    
-    for i in range(0, len(data) - lookback - predictforward, step):
-        sequences.append(data[i:i+lookback])
-        targets.append(data[i+lookback:i+lookback+predictforward, target_col])
 
-    return torch.tensor(np.array(sequences), dtype=torch.float32), torch.tensor(np.array(targets), dtype=torch.float32).squeeze(-1)
+    if blocks is None:
+        for i in range(0, len(data) - lookback - predictforward, step):
+            # Create a copy of the slice of the sequence to avoid modifying the original data
+            sequence = data[i:i + lookback + predictforward].copy()
+            # Mask the target values in the future prediction horizon (from i + lookback to i + lookback + predictforward)
+            sequence[lookback:lookback + predictforward, target_col] = -9999
+            # Append the sequence (with the masked target values) to sequences
+            sequences.append(sequence)
+
+            targets.append(data[i + lookback:i + lookback + predictforward, target_col])
+
+        return torch.tensor(np.array(sequences), dtype=torch.float32), torch.tensor(np.array(targets), dtype=torch.float32).squeeze(-1)
+    
+    else:
+        for block in blocks:
+            for i in range(block[0], block[1]+1 - lookback - predictforward, step):
+                # Create a copy of the slice of the sequence to avoid modifying the original data
+                sequence = data[i:i + lookback + predictforward].copy()
+                # Mask the target values in the future prediction horizon (from i + lookback to i + lookback + predictforward)
+                sequence[lookback:lookback + predictforward, target_col] = -9999
+                # Append the sequence (with the masked target values) to sequences
+                sequences.append(sequence)
+
+                targets.append(data[i + lookback:i + lookback + predictforward, target_col])
+
+        return torch.tensor(np.array(sequences), dtype=torch.float32), torch.tensor(np.array(targets), dtype=torch.float32).squeeze(-1)
+
+def create_sequences(data, lookback, predictforward, step=1, target_col=0, blocks=None):
+    """
+    Data should be of shape (# timestamps, # features). (e.g. train_matrix)
+
+    If blocks is provided, it should be in the following format:
+    blocks = [
+    (0, 23),
+    (30, 79),
+    (100, 105)
+    ]
+    i.e. both sides 
+    """
+
+    sequences = []
+    targets = []
+
+    if blocks is None:
+        for i in range(0, len(data) - lookback - predictforward, step):
+            # Create a copy of the slice of the sequence to avoid modifying the original data
+            sequence = data[i:i + lookback]
+            # Append the sequence
+            sequences.append(sequence)
+
+            targets.append(data[i + lookback:i + lookback + predictforward, target_col])
+
+        return torch.tensor(np.array(sequences), dtype=torch.float32), torch.tensor(np.array(targets), dtype=torch.float32).squeeze(-1)
+    
+    else:
+        for block in blocks:
+            for i in range(block[0], block[1]+1 - lookback - predictforward, step):
+                # Create a copy of the slice of the sequence to avoid modifying the original data
+                sequence = data[i:i + lookback]
+                # Append the sequence
+                sequences.append(sequence)
+
+                targets.append(data[i + lookback:i + lookback + predictforward, target_col])
+
+        return torch.tensor(np.array(sequences), dtype=torch.float32), torch.tensor(np.array(targets), dtype=torch.float32).squeeze(-1)
+    
 
 
 

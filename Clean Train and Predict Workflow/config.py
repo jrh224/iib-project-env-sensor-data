@@ -16,7 +16,7 @@ SEQ_STEP = 1 # =1 means no skipping start points in the data
 # Model to use for prediction
 PREDICT_MODEL = '26feb1433.pth'
 NUM_PREDICTIONS = 240 # Not really used anymore
-PREDICT_FROM = pd.to_datetime("2024/12/07 00:00:15").tz_localize('UTC') # Start date of lookback period
+PREDICT_FROM = pd.to_datetime("2024/12/07 07:00:00").tz_localize('UTC') # Start date of lookback period
 
 # Determine the train / test data source
 FILENAME = 'wadham college/Dom Bursar 24Nov2024 to Feb2025.csv' 

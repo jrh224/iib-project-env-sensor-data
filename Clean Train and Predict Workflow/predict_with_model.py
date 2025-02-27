@@ -36,7 +36,6 @@ print(f"Test Matrix Created Successfully [Shape: {test_matrix.shape}]")
 predict_from_i = sensor_data_test.df.index.get_loc(sensor_data_test.df.index[sensor_data_test.df.index >= config.PREDICT_FROM][0])
 print("Predict_from_i: " + str(predict_from_i))
 print("First Prediction Timestamp:", sensor_data_test.df.index[predict_from_i])
-print("Expected Start Timestamp:", config.PREDICT_FROM)
 # # TEST: Force control to be 100
 # forced_control = np.full(test_matrix[predict_from_i:, 2].shape, float(100))
 # test_matrix[predict_from_i:, 2] = forced_control
@@ -53,8 +52,7 @@ model.load_state_dict(torch.load(config.PREDICT_MODEL, weights_only=True))
 # Perform predictions
 model.eval()
 X_test, y_test = create_sequences(test_matrix, lookback=config.LOOKBACK, predictforward=config.OUTPUT_SIZE, step=config.SEQ_STEP, target_col=0, blocks=idx_blocks_test)
-current_lookback = X_test[predict_from_i] # TRY CHANGING THIS!!
-print(np.array(current_lookback).shape) # (156, 7)
+current_lookback = X_test[predict_from_i]
 
 input_tensor = torch.tensor(current_lookback, dtype=torch.float32).unsqueeze(0)
 with torch.no_grad():

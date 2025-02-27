@@ -19,12 +19,19 @@ from utils.helper_functions import *
 
 # Import sensor data into CustomDataframe object
 sensor_data = CustomDataframe(filename=config.FILENAME) # NB: change back to FILENAME if all in same file
-sensor_data_test = sensor_data.filter_by_date(start_date=config.start_date_train, end_date=config.end_date_train, in_place=False)
 
-sensor_data_test.interpolate_missing_rows()
-sensor_data_test.resample(freq='15s')
+sensor_data.interpolate_missing_rows()
+sensor_data.resample(freq='5Min')
+
+# Add external temperature to sensor_data object
+sensor_data.add_ext_temp_column(lat=config.LAT, long=config.LONG)
+# Add sunrise and sunset column (ensure this is done AFTER interpolation, since it is binary 0-1)
+sensor_data.add_sunrise_sunset_column(lat=config.LAT, long=config.LONG)
+
+sensor_data_test, idx_blocks_test = sensor_data.filter_by_date_ranges(dates=config.TEST_RANGE, in_place=False)
 
 test_matrix = sensor_data_test.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
+print(f"Test Matrix Created Successfully [Shape: {test_matrix.shape}]")
 
 scalers = joblib.load('scalers.gz') # Load up the previously trained scalers
 for i in range(test_matrix.shape[1]): # for each feature column
@@ -40,8 +47,14 @@ model.load_state_dict(torch.load(config.PREDICT_MODEL, weights_only=True))
 # Get the starting point for the predictions
 # predict_from_i = sensor_data_test.df.index[sensor_data_test.df['datetime'] > config.PREDICT_FROM].to_list()[0]
 predict_from_i = 0 # start from beginning of test set
-df_length = sensor_data_test.df.shape[0]
+# df_length = sensor_data_test.df.shape[0]
 rmse_values = []
+
+model.eval()
+X_test, y_test = create_sequences(test_matrix, lookback=config.LOOKBACK, predictforward=config.OUTPUT_SIZE, step=config.SEQ_STEP, target_col=0, blocks=idx_blocks_test)
+df_length = X_test.shape[0]
+print(df_length)
+current_lookback = X_test[predict_from_i]
 
 y_predictions = []
 y_actuals = []
@@ -50,9 +63,7 @@ model.eval()
 
 while predict_from_i < df_length - config.LOOKBACK - config.OUTPUT_SIZE:
     # Perform predictions
-    # predictions = autoregressive_predict(model, test_matrix, num_predictions=config.NUM_PREDICTIONS, start_point=predict_from_i)
-    
-    current_lookback = test_matrix[predict_from_i:config.LOOKBACK+predict_from_i]
+    current_lookback = X_test[predict_from_i]
     input_tensor = torch.tensor(current_lookback, dtype=torch.float32).unsqueeze(0)
     # Make prediction
     with torch.no_grad():
@@ -61,7 +72,7 @@ while predict_from_i < df_length - config.LOOKBACK - config.OUTPUT_SIZE:
     # Inverse transform predictions to get correct scale
     y_prediction = scalers[0].inverse_transform(np.array(predictions).reshape(-1, 1))
     # Get actual IAT readings
-    y_actual = test_matrix[predict_from_i+config.LOOKBACK:predict_from_i+config.LOOKBACK+config.OUTPUT_SIZE, 0]
+    y_actual = y_test[predict_from_i]
     y_actual = scalers[0].inverse_transform(np.array(y_actual).reshape(-1, 1))
 
     # Store y_prediction and y_actual for evaluation later on

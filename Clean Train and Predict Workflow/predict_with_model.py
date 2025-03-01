@@ -80,11 +80,14 @@ x_actual = sensor_data_test.df.iloc[predict_from_i:predict_from_i + config.LOOKB
 # Get actual IAT readings
 y_actual = sensor_data_test.df.iloc[predict_from_i:predict_from_i + config.LOOKBACK + predictions.shape[0]]["T"].to_numpy()
 
+# Get control readings
+control_actual = sensor_data_test.df.iloc[predict_from_i:predict_from_i + config.LOOKBACK + predictions.shape[0]]["C"].to_numpy() / 200 + 20
 
 
 plt.plot(x_actual, y_actual, label='Actual Temperature', color="blue", linestyle="-", marker="o")
 plt.plot(x_prediction, y_prediction, label='Autoregressive Predictions', color="red", linestyle="--", marker="x")
 # plt.plot(x_actual, exttemp, label="External temperature", color="green", linestyle="-", marker="o")
+plt.plot(x_actual, control_actual, label="Control signal", color="green", linestyle="--")
 plt.title('Autoregressive Temperature Predictions vs Actual Values')
 plt.ylabel('Temperature')
 plt.xlabel('Time')

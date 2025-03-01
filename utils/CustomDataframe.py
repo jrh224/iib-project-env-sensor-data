@@ -671,7 +671,7 @@ class CustomDataframe:
         # })
         self.df = self.df.resample(freq, label="right").agg({
             "T": "mean",
-            "C": "mean", # Could use last? not sure
+            "C": "mean",
             "Re": "mean",
             "Lux": "mean"
         })

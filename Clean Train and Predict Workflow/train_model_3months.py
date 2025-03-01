@@ -49,27 +49,33 @@ for i in range(train_matrix.shape[1]): # for each feature column
 joblib.dump(scalers, 'scalers.gz') # Store all the scalers in order to be used when predicting
 
 
-train_enc_inp, train_dec_inp, train_targets = get_encdec_inputs(train_matrix, lookback=config.LOOKBACK, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=idx_blocks_train)
-val_enc_inp, val_dec_inp, val_targets = get_encdec_inputs(val_matrix, lookback=config.LOOKBACK, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=idx_blocks_val)
+lookbacksToTest = [2, 6, 12, 24, 48, 72, 144]
+modelpaths = ["01mar1713_10min.pth", "01mar1713_30min.pth", "01mar1713_1hr.pth", "01mar1713_2hr.pth", "01mar1713_4hr.pth", "01mar1713_6hr.pth", "01mar1713_12hr.pth"]
 
-print(f"EncDec inputs successfully generated. EncInp: {train_enc_inp.shape}, DecInp: {train_dec_inp.shape}, Targets: {train_targets.shape}")
 
-# Create dataset for training
-train_dataset = TensorDataset(train_enc_inp, train_dec_inp, train_targets)
-val_dataset = TensorDataset(val_enc_inp, val_dec_inp, val_targets)
+for i, lookback in enumerate(lookbacksToTest):
 
-# Create DataLoader for efficient batching
-train_loader = DataLoader(train_dataset, batch_size=config.BATCH_SIZE, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=config.BATCH_SIZE, shuffle=False)
+    # train_enc_inp, train_dec_inp, train_targets = get_encdec_inputs(train_matrix, lookback=config.LOOKBACK, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=idx_blocks_train)
+    # val_enc_inp, val_dec_inp, val_targets = get_encdec_inputs(val_matrix, lookback=config.LOOKBACK, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=idx_blocks_val)
 
-hiddenSizesToTest = [2, 4, 8]
-modelpaths = ["28feb1906_2.pth", "28feb1906_4.pth", "28feb1906_8.pth"]
+    train_enc_inp, train_dec_inp, train_targets = get_encdec_inputs(train_matrix, lookback=lookback, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=idx_blocks_train)
+    val_enc_inp, val_dec_inp, val_targets = get_encdec_inputs(val_matrix, lookback=lookback, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=idx_blocks_val)
 
-for i, hiddensize in enumerate(hiddenSizesToTest):
+
+    print(f"EncDec inputs successfully generated. EncInp: {train_enc_inp.shape}, DecInp: {train_dec_inp.shape}, Targets: {train_targets.shape}")
+
+    # Create dataset for training
+    train_dataset = TensorDataset(train_enc_inp, train_dec_inp, train_targets)
+    val_dataset = TensorDataset(val_enc_inp, val_dec_inp, val_targets)
+
+    # Create DataLoader for efficient batching
+    train_loader = DataLoader(train_dataset, batch_size=config.BATCH_SIZE, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=config.BATCH_SIZE, shuffle=False)
+
 
     # Initialise model
-    model = Seq2SeqLSTMEncDec(hidden_dim=hiddensize)
-    print("Training model with hidden size: " + str(hiddensize))
+    model = Seq2SeqLSTMEncDec(hidden_dim=config.HIDDEN_SIZE)
+    print("Training model with hidden size: " + str(config.HIDDEN_SIZE))
 
     # Define optimizer and loss function
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)

@@ -10,9 +10,10 @@ import joblib
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 import torch
+from torch.utils.data import TensorDataset
 
 import config
-from models import LSTMModel, Seq2SeqLSTM
+from models import LSTMModel, Seq2SeqLSTM, Seq2SeqLSTMEncDec
 from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
 
@@ -36,39 +37,48 @@ print(f"Test Matrix Created Successfully [Shape: {test_matrix.shape}]")
 predict_from_i = sensor_data_test.df.index.get_loc(sensor_data_test.df.index[sensor_data_test.df.index >= config.PREDICT_FROM][0])
 print("Predict_from_i: " + str(predict_from_i))
 print("First Prediction Timestamp:", sensor_data_test.df.index[predict_from_i])
-# # TEST: Force control to be 100
-# forced_control = np.full(test_matrix[predict_from_i:, 2].shape, float(100))
-# test_matrix[predict_from_i:, 2] = forced_control
 
 scalers = joblib.load('scalers.gz') # Load up the previously trained scalers
 for i in range(test_matrix.shape[1]): # for each feature column
     scaler = scalers[i] # Use the appropriate scaler for each column
     test_matrix[:, i] = scaler.transform(test_matrix[:, i].reshape(-1, 1)).flatten() # scale one column at a time
 
+
+test_enc_inp, test_dec_inp, test_targets = get_encdec_inputs(test_matrix, lookback=config.LOOKBACK, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=idx_blocks_test)
+test_dataset = TensorDataset(test_enc_inp, test_dec_inp, test_targets)
+
+
+print(f"EncDec inputs successfully generated. EncInp: {test_enc_inp.shape}, DecInp: {test_dec_inp.shape}, Targets: {test_targets.shape}")
+
 # Initialise the model for prediction
-model = Seq2SeqLSTM()
+model = Seq2SeqLSTMEncDec()
 model.load_state_dict(torch.load(config.PREDICT_MODEL, weights_only=True))
 
 # Perform predictions
 model.eval()
-X_test, y_test = create_sequences(test_matrix, lookback=config.LOOKBACK, predictforward=config.OUTPUT_SIZE, step=config.SEQ_STEP, target_col=0, blocks=idx_blocks_test)
-current_lookback = X_test[predict_from_i]
 
-input_tensor = torch.tensor(current_lookback, dtype=torch.float32).unsqueeze(0)
+enc_inp, dec_inp, target = test_dataset[predict_from_i]
+
+# # Force heating to 100 for simulation
+# dec_inp = np.array(dec_inp)
+# dec_inp[:, 2] = scalers[2].transform(np.full_like(dec_inp.shape[0], 100).reshape(-1,1))
+# print(dec_inp[:, 2])
+# dec_inp = torch.tensor(dec_inp, dtype=torch.float32)
+
 with torch.no_grad():
-    predictions = model(input_tensor)
+    predictions = model(enc_inp, dec_inp)
 
 # Inverse transform predictions to get correct scale
 y_prediction = scalers[0].inverse_transform(np.array(predictions).reshape(-1, 1))
-print(y_prediction)
-y_real_temp = scalers[0].inverse_transform(np.array(y_test[0]).reshape(-1, 1))
-print(y_real_temp)
+# print(y_prediction)
+y_real_temp = scalers[0].inverse_transform(np.array(target).reshape(-1, 1))
+# print(y_real_temp)
 
 # Create timestamps
-x_prediction = sensor_data_test.df.iloc[predict_from_i+config.LOOKBACK:predict_from_i+config.LOOKBACK+predictions.shape[1]].index.to_numpy()
-x_actual = sensor_data_test.df.iloc[predict_from_i:predict_from_i + config.LOOKBACK + predictions.shape[1]].index.to_numpy()
+x_prediction = sensor_data_test.df.iloc[predict_from_i + config.LOOKBACK : predict_from_i + config.LOOKBACK + predictions.shape[0]].index.to_numpy()
+x_actual = sensor_data_test.df.iloc[predict_from_i:predict_from_i + config.LOOKBACK + predictions.shape[0]].index.to_numpy()
 # Get actual IAT readings
-y_actual = sensor_data_test.df.iloc[predict_from_i:predict_from_i + config.LOOKBACK + predictions.shape[1]]["T"].to_numpy()
+y_actual = sensor_data_test.df.iloc[predict_from_i:predict_from_i + config.LOOKBACK + predictions.shape[0]]["T"].to_numpy()
 
 
 

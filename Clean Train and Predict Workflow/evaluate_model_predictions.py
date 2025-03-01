@@ -11,8 +11,9 @@ import joblib
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 import torch
+from torch.utils.data import TensorDataset
 import config
-from models import LSTMModel, Seq2SeqLSTM
+from models import LSTMModel, Seq2SeqLSTM, Seq2SeqLSTMEncDec
 from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
 
@@ -38,42 +39,32 @@ for i in range(test_matrix.shape[1]): # for each feature column
     scaler = scalers[i] # Use the appropriate scaler for each column
     test_matrix[:, i] = scaler.transform(test_matrix[:, i].reshape(-1, 1)).flatten() # scale one column at a time
 
+test_enc_inp, test_dec_inp, test_targets = get_encdec_inputs(test_matrix, lookback=config.LOOKBACK, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=idx_blocks_test)
+test_dataset = TensorDataset(test_enc_inp, test_dec_inp, test_targets)
+
 # Initialise the model for prediction
-model = Seq2SeqLSTM()
+model = Seq2SeqLSTMEncDec()
 model.load_state_dict(torch.load(config.PREDICT_MODEL, weights_only=True))
 
 # Pass through train dataset, predicting one hour every half hour
 
 # Get the starting point for the predictions
 # predict_from_i = sensor_data_test.df.index[sensor_data_test.df['datetime'] > config.PREDICT_FROM].to_list()[0]
-predict_from_i = 0 # start from beginning of test set
-# df_length = sensor_data_test.df.shape[0]
-rmse_values = []
-
-model.eval()
-X_test, y_test = create_sequences(test_matrix, lookback=config.LOOKBACK, predictforward=config.OUTPUT_SIZE, step=config.SEQ_STEP, target_col=0, blocks=idx_blocks_test)
-df_length = X_test.shape[0]
-print(df_length)
-current_lookback = X_test[predict_from_i]
 
 y_predictions = []
 y_actuals = []
 
 model.eval()
 
-while predict_from_i < df_length - config.LOOKBACK - config.OUTPUT_SIZE:
-    # Perform predictions
-    current_lookback = X_test[predict_from_i]
-    input_tensor = torch.tensor(current_lookback, dtype=torch.float32).unsqueeze(0)
+for enc_inp, dec_inp, target in test_dataset:
     # Make prediction
     with torch.no_grad():
-        predictions = model(input_tensor)
+        predictions = model(enc_inp, dec_inp)
 
     # Inverse transform predictions to get correct scale
     y_prediction = scalers[0].inverse_transform(np.array(predictions).reshape(-1, 1))
     # Get actual IAT readings
-    y_actual = y_test[predict_from_i]
-    y_actual = scalers[0].inverse_transform(np.array(y_actual).reshape(-1, 1))
+    y_actual = scalers[0].inverse_transform(np.array(target).reshape(-1, 1))
 
     # Store y_prediction and y_actual for evaluation later on
     y_predictions.extend(np.array(y_prediction).reshape(-1).flatten())
@@ -90,9 +81,6 @@ while predict_from_i < df_length - config.LOOKBACK - config.OUTPUT_SIZE:
     # plt.ylabel("Temperature C")
     # plt.legend()
     # plt.show()
-
-    # predict_from_i += 120 # Add half an hour each time
-    predict_from_i += config.SEQ_STEP
 
 y_actuals = np.array(y_actuals)
 y_predictions = np.array(y_predictions)

@@ -3,20 +3,20 @@ import pandas as pd
 # Configuration
 LOOKBACK = 144 # 288 = 24 hrs / 5 min timesteps // set this to be 144 next time
 INPUT_SIZE = 7 # int tempt, ext temp, heating control, re, daylight, sin24hr, cos24hr
-OUTPUT_SIZE = 12 # 12 * 5 min = 1 hour of predictions
+HORIZON = 12 # 12 * 5 min = 1 hour of predictions
 BATCH_SIZE = 32
-HIDDEN_SIZE = 512
+HIDDEN_SIZE = 8
 LEARNING_RATE = 0.002
 WEIGHT_DECAY = 0.00001
 NUM_EPOCHS = 50 # Paper suggests 60
 TRAIN_SPLIT = 0.8
 EARLY_STOPPING_PATIENCE = 5
-SEQ_STEP = 1 # =1 means no skipping start points in the data
+STRIDE = 1 # =1 means no skipping start points in the data when creating sequences
 
 # Model to use for prediction
-PREDICT_MODEL = '26feb1433.pth'
+PREDICT_MODEL = '01mar_.pth'
 NUM_PREDICTIONS = 240 # Not really used anymore
-PREDICT_FROM = pd.to_datetime("2024/12/07 07:00:00").tz_localize('UTC') # Start date of lookback period
+PREDICT_FROM = pd.to_datetime("2025/02/21 01:00:000").tz_localize('UTC') # Start date of lookback period
 
 # Determine the train / test data source
 FILENAME = 'wadham college/Dom Bursar 24Nov2024 to Feb2025.csv' 

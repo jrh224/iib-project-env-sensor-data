@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from config import INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE
+from config import INPUT_SIZE, HIDDEN_SIZE, HORIZON
 
 # Define LSTM model
 class LSTMModel(nn.Module):
@@ -17,14 +17,14 @@ class LSTMModel(nn.Module):
 # Model based on paper "Building thermal dynamics modeling with deep transfer learning using a large residential smart thermostat dataset"
 # See paper for hyperparameter values
 class Seq2SeqLSTM(nn.Module):
-    def __init__(self, input_size=INPUT_SIZE, hidden_size=HIDDEN_SIZE, output_size=OUTPUT_SIZE, num_layers=1):
+    def __init__(self, input_size=INPUT_SIZE, hidden_size=HIDDEN_SIZE, horizon=HORIZON, num_layers=1):
         super(Seq2SeqLSTM, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.output_size = output_size
+        self.horizon = horizon
         self.lstm = nn.LSTM(self.input_size, self.hidden_size, self.num_layers, batch_first=True)
-        self.linear = nn.Linear(self.hidden_size, output_size)
+        self.linear = nn.Linear(self.hidden_size, horizon)
 
     def forward(self, input):
         output, _ = self.lstm(input) # no need for _ hidden state
@@ -37,7 +37,7 @@ class Seq2SeqLSTM(nn.Module):
 # Encoder/decoder architecture to allow for the inclusion of future covariates
 # Based on papers linked from https://stackoverflow.com/questions/70361179/how-to-include-future-values-in-a-time-series-prediction-of-a-rnn-in-keras
 class Seq2SeqLSTMEncDec(nn.Module):
-    def __init__(self, input_dim=INPUT_SIZE, hidden_dim=HIDDEN_SIZE, output_dim=OUTPUT_SIZE):
+    def __init__(self, input_dim=INPUT_SIZE, hidden_dim=HIDDEN_SIZE, output_dim=1):
         super(Seq2SeqLSTMEncDec, self).__init__()
         self.encoder_lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
         self.decoder_lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)

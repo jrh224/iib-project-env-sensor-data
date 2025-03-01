@@ -84,6 +84,60 @@ def create_sequences(data, lookback, predictforward, step=1, target_col=0, block
 
         return torch.tensor(np.array(sequences), dtype=torch.float32), torch.tensor(np.array(targets), dtype=torch.float32).squeeze(-1)
     
+def get_encdec_inputs(matrix, lookback, horizon, stride=1, target_col=0, blocks=None):
+    """
+    Matrix should be of shape (# timestamps, # features). (e.g. train_matrix)
+
+    If blocks is provided, it should be in the following format:
+    blocks = [
+    (0, 23),
+    (30, 79),
+    (100, 105)
+    ]
+    i.e. both sides 
+
+    Returns torch.tensor objects (encoder_ins, decoder_ins, targets)
+    """
+
+    encoder_ins = []
+    decoder_ins = []
+    targets = []
+
+
+    if blocks is None:
+        for i in range(0, matrix.shape[0] - lookback - horizon, stride):
+            tlookback = i
+            t0 = i+lookback
+            thorizon = i+lookback+horizon
+
+            encoder_in = matrix[tlookback:t0, :] # All features, before t=0
+            encoder_ins.append(encoder_in)
+
+            decoder_in = matrix[t0:thorizon, :] # All features, after t=0
+            np.delete(decoder_in, target_col, axis=1) # Remove target column
+            decoder_ins.append(decoder_in)
+
+            target = matrix[t0:thorizon, target_col] # Target column, after t=0
+            targets.append(target)
+    else:
+        for block in blocks:
+            for i in range(block[0], block[1]+1 - lookback - horizon, stride):
+                tlookback = i
+                t0 = i+lookback
+                thorizon = i+lookback+horizon
+
+                encoder_in = matrix[tlookback:t0, :] # All features, before t=0
+                encoder_ins.append(encoder_in)
+
+                decoder_in = matrix[t0:thorizon, :] # All features, after t=0
+                np.delete(decoder_in, target_col, axis=1) # Remove target column
+                decoder_ins.append(decoder_in)
+
+                target = matrix[t0:thorizon, target_col] # Target column, after t=0
+                targets.append(target)
+
+    return torch.tensor(np.array(encoder_ins), dtype=torch.float32), torch.tensor(np.array(decoder_ins), dtype=torch.float32), torch.tensor(np.array(targets), dtype=torch.float32).unsqueeze(-1)
+
 
 
 

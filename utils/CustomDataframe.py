@@ -657,6 +657,7 @@ class CustomDataframe:
         cos_24hr = np.cos(2 * np.pi * time_fraction).reshape(-1, 1)
 
         matrix = np.hstack((iat, eat, control, re, daylight, sin_24hr, cos_24hr))
+        # matrix = np.hstack((iat, eat, control))
         return matrix
     
     def resample(self, freq='5Min'):

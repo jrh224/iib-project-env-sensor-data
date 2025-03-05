@@ -40,7 +40,7 @@ class Seq2SeqLSTMEncDec(nn.Module):
     def __init__(self, input_dim=INPUT_SIZE, hidden_dim=HIDDEN_SIZE, output_dim=1):
         super(Seq2SeqLSTMEncDec, self).__init__()
         self.encoder_lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
-        self.decoder_lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
+        self.decoder_lstm = nn.LSTM(input_dim-1, hidden_dim, batch_first=True)
         self.fc = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, encoder_inputs, decoder_inputs):

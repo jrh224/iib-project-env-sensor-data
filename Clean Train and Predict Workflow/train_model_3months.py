@@ -48,10 +48,8 @@ for i in range(train_matrix.shape[1]): # for each feature column
     scalers.append(scaler)
 joblib.dump(scalers, 'scalers.gz') # Store all the scalers in order to be used when predicting
 
-
 lookbacksToTest = [2, 6, 12, 24, 48, 72, 144]
-modelpaths = ["01mar1713_10min.pth", "01mar1713_30min.pth", "01mar1713_1hr.pth", "01mar1713_2hr.pth", "01mar1713_4hr.pth", "01mar1713_6hr.pth", "01mar1713_12hr.pth"]
-
+modelNames = ["2mar1612_10min.pth", "2mar1612_30min.pth", "2mar1612_1hr.pth", "2mar1612_2hr.pth", "2mar1612_4hr.pth", "2mar1612_6hr.pth", "2mar1612_12hr.pth"]
 
 for i, lookback in enumerate(lookbacksToTest):
 
@@ -87,8 +85,7 @@ for i, lookback in enumerate(lookbacksToTest):
 
     min_val_loss = float('inf')  # Track best validation loss
     epochs_no_improve = 0  # Counter for early stopping
-    # best_model_path = '28feb1344.pth'  # Path to save best model
-    best_model_path = modelpaths[i]
+    best_model_path = modelNames[i]  # Path to save best model
 
     model.train()
     for epoch in range(config.NUM_EPOCHS):

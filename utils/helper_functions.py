@@ -114,7 +114,7 @@ def get_encdec_inputs(matrix, lookback, horizon, stride=1, target_col=0, blocks=
             encoder_ins.append(encoder_in)
 
             decoder_in = matrix[t0:thorizon, :] # All features, after t=0
-            np.delete(decoder_in, target_col, axis=1) # Remove target column
+            decoder_in = np.delete(decoder_in, target_col, axis=1) # Remove target column
             decoder_ins.append(decoder_in)
 
             target = matrix[t0:thorizon, target_col] # Target column, after t=0
@@ -130,7 +130,7 @@ def get_encdec_inputs(matrix, lookback, horizon, stride=1, target_col=0, blocks=
                 encoder_ins.append(encoder_in)
 
                 decoder_in = matrix[t0:thorizon, :] # All features, after t=0
-                np.delete(decoder_in, target_col, axis=1) # Remove target column
+                decoder_in = np.delete(decoder_in, target_col, axis=1) # Remove target column
                 decoder_ins.append(decoder_in)
 
                 target = matrix[t0:thorizon, target_col] # Target column, after t=0

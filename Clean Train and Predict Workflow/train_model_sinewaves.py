@@ -95,7 +95,8 @@ val_loader = DataLoader(val_dataset, batch_size=config.BATCH_SIZE, shuffle=False
 
 
 # Initialise model
-model = Seq2SeqLSTMEncDec(hidden_dim=config.HIDDEN_SIZE)
+# model = Seq2SeqLSTMEncDec(hidden_dim=config.HIDDEN_SIZE)
+model = Seq2SeqLSTM()
 print("Training model with hidden size: " + str(config.HIDDEN_SIZE))
 
 # Define optimizer and loss function
@@ -108,15 +109,17 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.N
 
 min_val_loss = float('inf')  # Track best validation loss
 epochs_no_improve = 0  # Counter for early stopping
-best_model_path = "5mar_1059_sinewaves.pth"  # Path to save best model
+best_model_path = "5mar_1059_sinewaves_seq2seqlstm.pth"  # Path to save best model
 
 model.train()
 for epoch in range(config.NUM_EPOCHS):
     # Training
     epoch_train_loss = 0
     for enc_inp, dec_inp, target in train_loader:
+        target = target.squeeze(-1)
         optimizer.zero_grad()
-        output = model(enc_inp, dec_inp)  # Forward pass
+        # output = model(enc_inp, dec_inp)  # Forward pass
+        output = model(enc_inp)
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
@@ -133,7 +136,9 @@ for epoch in range(config.NUM_EPOCHS):
     epoch_val_loss = 0
     with torch.no_grad():
         for enc_inp, dec_inp, target in val_loader:
-            output = model(enc_inp, dec_inp)
+            target = target.squeeze(-1)
+            # output = model(enc_inp, dec_inp)
+            output = model(enc_inp)
             loss = criterion(output, target)
             epoch_val_loss += loss.item()
 

@@ -26,7 +26,6 @@ sensor_data.add_ext_temp_column(lat=config.LAT, long=config.LONG)
 # Add sunrise and sunset column (ensure this is done AFTER interpolation, since it is binary 0-1)
 sensor_data.add_sunrise_sunset_column(lat=config.LAT, long=config.LONG)
 
-
 sensor_data_train, idx_blocks_train = sensor_data.filter_by_date_ranges(dates=config.TRAIN_RANGE, in_place=False)
 
 train_matrix = sensor_data_train.create_pytorch_matrix(lat=config.LAT, long=config.LONG)

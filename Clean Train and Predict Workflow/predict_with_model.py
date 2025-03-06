@@ -16,6 +16,7 @@ import config
 from models import LSTMModel, Seq2SeqLSTM, Seq2SeqLSTMEncDec
 from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
+from utils.fake_data_gen import *
 
 # # Import sensor data into CustomDataframe object
 # sensor_data = CustomDataframe(filename=config.FILENAME) # NB: change back to FILENAME if all in same file
@@ -38,29 +39,11 @@ from utils.helper_functions import *
 # print("Predict_from_i: " + str(predict_from_i))
 # print("First Prediction Timestamp:", sensor_data_test.df.index[predict_from_i])
 
-
-t = np.linspace(2061, 4220, 25920) # Roughly based no 2160 hours in 3 months, with 12x as many datapoints
-x1 = 3 * np.sin((2 * np.pi * (t - 12)) / 24) + 7
-x2 = np.cos((2 * np.pi * (t+4)) / 4)
-x3 = 0.5 * np.sin((2 * np.pi * (t-7)) / 9)
-x4 = 3 * np.sin((2 * np.pi * (t+1)) / 5) + 2
-x5 = 2 * np.cos((2 * np.pi * (t-3)) / 2)
-x6 = 2 * np.cos((2 * np.pi * (t-3)) / 3)
-y = x1 + x2 + x3 + x4 + x5 + x6
-
-x1 = x1.reshape(-1, 1)
-x2 = x2.reshape(-1, 1)
-x3 = x3.reshape(-1, 1)
-x4 = x4.reshape(-1, 1)
-x5 = x5.reshape(-1, 1)
-x6 = x6.reshape(-1, 1)
-y = y.reshape(-1, 1)
-
-# train_split = config.TRAIN_SPLIT # 0.8
-# train_split_i = int(np.floor(len(t) * 0.8))
-# print(train_split_i)
-
-test_matrix = np.hstack((y, x1, x2, x3, x4, x5, x6))
+length = 25920
+hours = 2160
+t = np.linspace(0, hours, length)
+test_matrix = gen_sum_of_exp(hours=2160, length=25920, no_features=6, seed=51)
+test_matrix_unscaled = test_matrix.copy()
 # train_matrix = full_matrix[:train_split_i, :]
 # val_matrix = full_matrix[train_split_i:, :]
 
@@ -90,9 +73,9 @@ enc_inp, dec_inp, target = test_dataset[0]
 # # Force heating to 100 for simulation
 # dec_inp = np.array(dec_inp)
 # print(dec_inp.shape)
-# print(dec_inp[:, 1])
-# dec_inp[:, 1] = scalers[2].transform(np.full_like(dec_inp.shape[0], 100).reshape(-1,1))
-# print(dec_inp[:, 1])
+# print(dec_inp[:, 2])
+# dec_inp[:, 2] = scalers[2].transform(np.full_like(dec_inp.shape[0], 1).reshape(-1,1))
+# print(dec_inp[:, 2])
 # dec_inp = torch.tensor(dec_inp, dtype=torch.float32)
 
 # print(enc_inp)
@@ -119,7 +102,7 @@ y_real_temp = scalers[0].inverse_transform(np.array(target).reshape(-1, 1))
 
 x_actual = t[0 : config.LOOKBACK + predictions.shape[0]]
 x_prediction = t[config.LOOKBACK : config.LOOKBACK + predictions.shape[0]]
-y_actual = y[0 : config.LOOKBACK + predictions.shape[0]]
+y_actual = test_matrix_unscaled[0 : config.LOOKBACK + predictions.shape[0], 0]
 
 print(x_actual.shape)
 print(x_prediction.shape)

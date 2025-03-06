@@ -90,7 +90,7 @@ class CustomDataframe:
         else:
             return CustomDataframe(df=self.df[(self.df['datetime'] >= start_date) & (self.df['datetime'] <= end_date)])
         
-    def filter_by_date_ranges(self, dates, in_place=True):
+    def filter_by_date_ranges(self, dates, in_place=True, return_separate=False):
         """
         Pass in dates in the following format: 
         [
@@ -130,9 +130,18 @@ class CustomDataframe:
             # Attention: defined such that the end indices of a block are inclusive
             idx_blocks.append((np.where(filtered_indices >= block[0])[0][0], np.where(filtered_indices <= block[1])[0][-1]))
 
-        if not in_place:
+        if not in_place and not return_separate:
             return CustomDataframe(df=filtered_df), idx_blocks
         
+        if return_separate:
+            # Otherwise, return multiple dataframes
+            dataframes = []
+            for block in idx_blocks:
+                dataframes.append(filtered_df.iloc[block[0]:block[1]+1])
+
+            return dataframes
+
+
         self.df = filtered_df
         return None, idx_blocks
     

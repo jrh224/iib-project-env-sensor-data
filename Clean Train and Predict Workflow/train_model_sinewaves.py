@@ -16,6 +16,7 @@ import config
 from models import LSTMModel, Seq2SeqLSTM, Seq2SeqLSTMEncDec
 from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
+from utils.fake_data_gen import *
 
 # # Import sensor data into CustomDataframe object
 # sensor_data = CustomDataframe(filename=config.FILENAME)
@@ -39,28 +40,11 @@ from utils.helper_functions import *
 # val_matrix = sensor_data_val.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
 # print(f"Validation Matrix Created Successfully [Shape: {val_matrix.shape}]")
 
-t = np.linspace(0, 2160, 25920) # Roughly based no 2160 hours in 3 months, with 12x as many datapoints
-x1 = 3 * np.sin((2 * np.pi * (t - 12)) / 24) + 7
-x2 = np.cos((2 * np.pi * (t+4)) / 4)
-x3 = 0.5 * np.sin((2 * np.pi * (t-7)) / 9)
-x4 = 3 * np.sin((2 * np.pi * (t+1)) / 5) + 2
-x5 = 2 * np.cos((2 * np.pi * (t-3)) / 2)
-x6 = 2 * np.cos((2 * np.pi * (t-3)) / 3)
-y = x1 + x2 + x3 + x4 + x5 + x6
+full_matrix = gen_sum_of_exp(hours=2160, length=25920, no_features=6)
+print(full_matrix.shape)
+train_split = config.TRAIN_SPLIT
+train_split_i = int(np.floor(full_matrix.shape[0] * 0.8))
 
-x1 = x1.reshape(-1, 1)
-x2 = x2.reshape(-1, 1)
-x3 = x3.reshape(-1, 1)
-x4 = x4.reshape(-1, 1)
-x5 = x5.reshape(-1, 1)
-x6 = x6.reshape(-1, 1)
-y = y.reshape(-1, 1)
-
-train_split = config.TRAIN_SPLIT # 0.8
-train_split_i = int(np.floor(len(t) * 0.8))
-print(train_split_i)
-
-full_matrix = np.hstack((y, x1, x2, x3, x4, x5, x6))
 train_matrix = full_matrix[:train_split_i, :]
 val_matrix = full_matrix[train_split_i:, :]
 
@@ -96,7 +80,7 @@ val_loader = DataLoader(val_dataset, batch_size=config.BATCH_SIZE, shuffle=False
 
 # Initialise model
 # model = Seq2SeqLSTMEncDec(hidden_dim=config.HIDDEN_SIZE)
-model = Seq2SeqLSTM()
+model = Seq2SeqLSTMEncDec()
 print("Training model with hidden size: " + str(config.HIDDEN_SIZE))
 
 # Define optimizer and loss function
@@ -109,17 +93,17 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.N
 
 min_val_loss = float('inf')  # Track best validation loss
 epochs_no_improve = 0  # Counter for early stopping
-best_model_path = "5mar_1059_sinewaves_seq2seqlstm.pth"  # Path to save best model
+best_model_path = "6mar_1015.pth"  # Path to save best model
 
 model.train()
 for epoch in range(config.NUM_EPOCHS):
     # Training
     epoch_train_loss = 0
     for enc_inp, dec_inp, target in train_loader:
-        target = target.squeeze(-1)
+        # target = target.squeeze(-1)
         optimizer.zero_grad()
-        # output = model(enc_inp, dec_inp)  # Forward pass
-        output = model(enc_inp)
+        output = model(enc_inp, dec_inp)  # Forward pass
+        # output = model(enc_inp)
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
@@ -136,9 +120,9 @@ for epoch in range(config.NUM_EPOCHS):
     epoch_val_loss = 0
     with torch.no_grad():
         for enc_inp, dec_inp, target in val_loader:
-            target = target.squeeze(-1)
-            # output = model(enc_inp, dec_inp)
-            output = model(enc_inp)
+            # target = target.squeeze(-1)
+            output = model(enc_inp, dec_inp)
+            # output = model(enc_inp)
             loss = criterion(output, target)
             epoch_val_loss += loss.item()
 

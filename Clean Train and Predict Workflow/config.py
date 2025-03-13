@@ -1,20 +1,20 @@
 import pandas as pd
 
 # Configuration
-LOOKBACK = 144 # 288 = 24 hrs / 5 min timesteps // set this to be 144 next time
+LOOKBACK = 12 # 288 = 24 hrs / 5 min timesteps // set this to be 144 next time
 INPUT_SIZE = 7 # int tempt, ext temp, heating control, re, daylight, sin24hr, cos24hr
 HORIZON = 12 # 12 * 5 min = 1 hour of predictions
 BATCH_SIZE = 32
-HIDDEN_SIZE = 32
+HIDDEN_SIZE = 128
 LEARNING_RATE = 0.002
 WEIGHT_DECAY = 0.00001
 NUM_EPOCHS = 50 # Paper suggests 60
 TRAIN_SPLIT = 0.8
-EARLY_STOPPING_PATIENCE = 5
+EARLY_STOPPING_PATIENCE = 8 # 8
 STRIDE = 1 # =1 means no skipping start points in the data when creating sequences
 
 # Model to use for prediction
-PREDICT_MODEL = '6mar_1015.pth'
+PREDICT_MODEL = '13mar_1325_m2.pth'
 NUM_PREDICTIONS = 240 # Not really used anymore
 PREDICT_FROM = pd.to_datetime("2024/12/07 00:05:00").tz_localize('UTC') # Start date of lookback period
 

@@ -18,30 +18,13 @@ from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
 from utils.fake_data_gen import *
 
-# # Import sensor data into CustomDataframe object
-# sensor_data = CustomDataframe(filename=config.FILENAME)
-# sensor_data.interpolate_missing_rows()
-# sensor_data.resample(freq='5Min')
+best_model_path = "13mar_1325_m2.pth"  # Path to save best model
 
-# # Add external temperature to sensor_data object
-# sensor_data.add_ext_temp_column(lat=config.LAT, long=config.LONG)
-# # Add sunrise and sunset column (ensure this is done AFTER interpolation, since it is binary 0-1)
-# sensor_data.add_sunrise_sunset_column(lat=config.LAT, long=config.LONG)
+# Can vary the data generated here
+# full_matrix = gen_sum_of_consts(hours=2160, length=25920, no_covariates=6, seed=42)
+# full_matrix = gen_sum_of_consts_w_lag(hours=2160, length=25920, no_covariates=6, seed=42)
+full_matrix = gen_sum_of_exp(hours=2160, length=25920, no_covariates=6, seed=42)
 
-
-# sensor_data_train, idx_blocks_train = sensor_data.filter_by_date_ranges(dates=config.TRAIN_RANGE, in_place=False)
-
-# train_matrix = sensor_data_train.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
-# print(f"Train Matrix Created Successfully [Shape: {train_matrix.shape}]")
-
-# sensor_data_val, idx_blocks_val = sensor_data.filter_by_date_ranges(dates=config.VALID_RANGE, in_place=False)
-
-
-# val_matrix = sensor_data_val.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
-# print(f"Validation Matrix Created Successfully [Shape: {val_matrix.shape}]")
-
-full_matrix = gen_sum_of_exp(hours=2160, length=25920, no_features=6)
-print(full_matrix.shape)
 train_split = config.TRAIN_SPLIT
 train_split_i = int(np.floor(full_matrix.shape[0] * 0.8))
 
@@ -60,12 +43,8 @@ joblib.dump(scalers, 'scalers.gz') # Store all the scalers in order to be used w
 
 
 
-# train_enc_inp, train_dec_inp, train_targets = get_encdec_inputs(train_matrix, lookback=config.LOOKBACK, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=idx_blocks_train)
-# val_enc_inp, val_dec_inp, val_targets = get_encdec_inputs(val_matrix, lookback=config.LOOKBACK, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=idx_blocks_val)
-
 train_enc_inp, train_dec_inp, train_targets = get_encdec_inputs(train_matrix, lookback=config.LOOKBACK, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=None)
 val_enc_inp, val_dec_inp, val_targets = get_encdec_inputs(val_matrix, lookback=config.LOOKBACK, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=None)
-
 
 print(f"EncDec inputs successfully generated. EncInp: {train_enc_inp.shape}, DecInp: {train_dec_inp.shape}, Targets: {train_targets.shape}")
 
@@ -78,10 +57,9 @@ train_loader = DataLoader(train_dataset, batch_size=config.BATCH_SIZE, shuffle=T
 val_loader = DataLoader(val_dataset, batch_size=config.BATCH_SIZE, shuffle=False)
 
 
-# Initialise model
-# model = Seq2SeqLSTMEncDec(hidden_dim=config.HIDDEN_SIZE)
+# # Initialise model
 model = Seq2SeqLSTMEncDec()
-print("Training model with hidden size: " + str(config.HIDDEN_SIZE))
+# print("Training model")
 
 # Define optimizer and loss function
 optimizer = torch.optim.Adam(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
@@ -93,18 +71,16 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.N
 
 min_val_loss = float('inf')  # Track best validation loss
 epochs_no_improve = 0  # Counter for early stopping
-best_model_path = "6mar_1015.pth"  # Path to save best model
+
 
 model.train()
 for epoch in range(config.NUM_EPOCHS):
     # Training
     epoch_train_loss = 0
-    for enc_inp, dec_inp, target in train_loader:
-        # target = target.squeeze(-1)
+    for enc_inps, dec_inps, targets in train_loader:
         optimizer.zero_grad()
-        output = model(enc_inp, dec_inp)  # Forward pass
-        # output = model(enc_inp)
-        loss = criterion(output, target)
+        output = model(enc_inps, dec_inps)  # Forward pass
+        loss = criterion(output, targets)
         loss.backward()
         optimizer.step()
         epoch_train_loss += loss.item()
@@ -113,17 +89,15 @@ for epoch in range(config.NUM_EPOCHS):
     scheduler.step()
 
     avg_train_loss = epoch_train_loss / len(train_loader)
-    
+
 
     # Validation
     model.eval()  # Set model to evaluation mode
     epoch_val_loss = 0
     with torch.no_grad():
-        for enc_inp, dec_inp, target in val_loader:
-            # target = target.squeeze(-1)
-            output = model(enc_inp, dec_inp)
-            # output = model(enc_inp)
-            loss = criterion(output, target)
+        for enc_inps, dec_inps, targets in val_loader:
+            output = model(enc_inps, dec_inps)
+            loss = criterion(output, targets)
             epoch_val_loss += loss.item()
 
     avg_val_loss = epoch_val_loss / len(val_loader)
@@ -149,4 +123,3 @@ for epoch in range(config.NUM_EPOCHS):
 
     model.train()  # Switch back to training mode
 
-# torch.save(model.state_dict(), '25feb1502.pth')

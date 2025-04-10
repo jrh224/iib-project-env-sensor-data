@@ -1,0 +1,143 @@
+import sys
+import os
+
+from matplotlib import pyplot as plt
+
+# Add the parent directory of 'my_package' to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+import joblib
+from sklearn.preprocessing import MinMaxScaler
+import numpy as np
+import torch
+from torch.utils.data import TensorDataset, DataLoader
+
+import config
+from models import LSTMModel, Seq2SeqLSTM, Seq2SeqLSTMEncDec, Seq2SeqLSTMEncDec_CNN
+from utils.CustomDataframe import CustomDataframe
+from utils.helper_functions import *
+from utils.fake_data_gen import *
+
+
+WITH_CNN = True
+
+
+# Import sensor data into CustomDataframe object
+sensor_data = CustomDataframe(filename=config.FILENAME)
+sensor_data.interpolate_missing_rows()
+sensor_data.resample(freq='5Min')
+
+# Add external temperature to sensor_data object
+sensor_data.add_ext_temp_column(lat=config.LAT, long=config.LONG)
+# Add sunrise and sunset column (ensure this is done AFTER interpolation, since it is binary 0-1)
+sensor_data.add_sunrise_sunset_column(lat=config.LAT, long=config.LONG)
+
+sensor_data_test, idx_blocks_test = sensor_data.filter_by_date_ranges(dates=config.TEST_RANGE, in_place=False)
+test_matrix = sensor_data_test.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
+print(f"Test Matrix Created Successfully [Shape: {test_matrix.shape}]")
+
+test_matrix_unscaled = test_matrix.copy()
+
+
+scalers = joblib.load(config.SCALER_FILE) # Load up the previously trained scalers
+for i in range(test_matrix.shape[1]): # for each feature column
+    scaler = scalers[i] # Use the appropriate scaler for each column
+    test_matrix[:, i] = scaler.transform(test_matrix[:, i].reshape(-1, 1)).flatten() # scale one column at a time
+
+
+test_enc_inp, test_dec_inp, test_targets = get_encdec_inputs(test_matrix, lookback=config.LOOKBACK, horizon=config.HORIZON, stride=config.STRIDE, target_col=0, blocks=None)
+
+# Create dataset for training
+test_dataset = TensorDataset(test_enc_inp, test_dec_inp, test_targets)
+print(f"EncDec inputs successfully generated. EncInp: {test_enc_inp.shape}, DecInp: {test_dec_inp.shape}, Targets: {test_targets.shape}")
+
+# Initialise the model for prediction
+if WITH_CNN:
+    model = Seq2SeqLSTMEncDec_CNN()
+else:
+    model = Seq2SeqLSTMEncDec()
+model.load_state_dict(torch.load(config.PREDICT_MODEL, weights_only=True))
+
+# Perform predictions
+model.eval()
+
+start_time = pd.to_datetime("2024-12-07 13:35:00").tz_localize("Europe/London").tz_convert("UTC")
+# start_time = pd.to_datetime("2025-02-22 13:00:00").tz_localize("Europe/London").tz_convert("UTC")
+start_point=sensor_data_test.df.index.get_loc(start_time)
+print("Start index: ", start_point)
+
+tlookback = start_point
+t0 = tlookback+config.LOOKBACK
+thorizon = t0+config.HORIZON
+
+
+# Force covariate values from this point onward
+enc_inp = test_matrix[tlookback:t0, :]
+dec_inp = test_matrix[t0:thorizon, 1:]
+
+# # matrix = np.hstack((iat, eat, control, re, daylight, sin_24hr, cos_24hr))
+# # dec_inp = (time [12], features)
+# print(dec_inp)
+# # Set EAT to be constant
+# dec_inp[:, 0] = enc_inp[-1, 1] # since column 0 is removed, we have to copy from final value of one column across
+# # Set control to be 0
+# dec_inp[:, 1] = 1
+# # Set re to be 0
+# dec_inp[:, 2] = 0
+# # No need to change daylight or the time values I think
+# print(dec_inp)
+
+
+# Convert to tensors for prediction
+enc_inp = torch.tensor(enc_inp, dtype=torch.float32) # All features, before t=0 (start_point+lookback)
+dec_inp = torch.tensor(dec_inp, dtype=torch.float32) # Not including feature 0 (the target)
+
+
+predictions = model(enc_inp, dec_inp)
+predictions = predictions.detach().cpu().numpy()  # Convert to NumPy array
+
+
+# Inverse transform predictions to get correct scale
+y_prediction = scalers[0].inverse_transform(np.array(predictions).reshape(-1, 1))
+# print(y_prediction)
+
+y_actual = test_matrix_unscaled[tlookback:thorizon, 0] # column 0 = targets
+# print(y_actual)
+
+x_actual = sensor_data_test.df.iloc[tlookback : thorizon].index
+x_prediction = sensor_data_test.df.iloc[t0:thorizon].index
+
+fontsize = 15
+labelsize = 13
+plt.plot(x_actual, y_actual, label='Ground truth temperature', color="blue", linestyle="-", marker="o")
+plt.plot(x_prediction, y_prediction, label='Predicted temperature', color="red", linestyle="--", marker="x")
+
+# Add shaded regions to show when control is high
+plt.axvspan(x_actual[i], x_actual[i], color='gray', alpha=0.3, label="Control on")
+for i, control in enumerate(enc_inp[:, 2]):
+    timestamp = x_actual[i]
+    start_time = timestamp - pd.Timedelta(minutes=2.5)
+    end_time = timestamp + pd.Timedelta(minutes=2.5)
+    if control > 0:
+        plt.axvspan(start_time, end_time, color='gray', alpha=0.3)  # Adjust color and transparency as needed
+for i, control in enumerate(dec_inp[:, 1]):
+    timestamp = x_prediction[i]
+    start_time = timestamp - pd.Timedelta(minutes=2.5)
+    end_time = timestamp + pd.Timedelta(minutes=2.5)
+    if control > 0:
+        plt.axvspan(start_time, end_time, color='gray', alpha=0.3)  # Adjust color and transparency as needed
+
+# plt.plot(x_actual, exttemp, label="External temperature", color="green", linestyle="-", marker="o")
+# plt.plot(x_actual, control_actual, label="Control signal", color="green", linestyle="--")
+plt.title('Predicted temperature vs ground truth (Model 3: Direct + CNN)', fontsize=fontsize)
+plt.gca().set_xlabel("Time", fontsize=fontsize)
+plt.gca().set_ylabel("Temperature °C", fontsize=fontsize)
+plt.gca().tick_params(axis='x', labelsize=labelsize)  # Set font size for x-axis ticks
+plt.gca().tick_params(axis='y', labelsize=labelsize)
+plt.grid(True)
+plt.xticks(rotation=45)
+plt.legend(fontsize=labelsize)
+plt.gcf().set_tight_layout(True)
+plt.gcf().set_figheight(5)
+plt.gcf().set_figwidth(8)
+plt.show()

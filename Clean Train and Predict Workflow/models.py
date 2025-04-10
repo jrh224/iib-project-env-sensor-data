@@ -102,3 +102,69 @@ class Seq2SeqLSTMEncDec(nn.Module): # Option 2
 #         output, hidden = self.lstm(X, hidden)
 #         output = self.out(output)
 #         return output, hidden
+
+
+# Define LSTM iterative model with CNN layer
+class LSTM_CNN_Model(nn.Module): # Option 1
+    def __init__(self, input_size=INPUT_SIZE, hidden_size=HIDDEN_SIZE, output_size=1, cnn_channels=16):
+        super(LSTM_CNN_Model, self).__init__()
+        # 1D CNN layer - Feature-wise convolution while preserving time dimension
+        self.conv1d = nn.Conv1d(in_channels=input_size, out_channels=cnn_channels, kernel_size=1)
+
+        self.lstm = nn.LSTM(input_size=cnn_channels, hidden_size=hidden_size, batch_first=True)
+        self.linear = nn.Linear(hidden_size, output_size) # Apparently don't need a ReLU layer because this is a regression task
+        
+    def forward(self, x):
+        # x shape: (batch_size, seq_length, input_size)
+        # Permute for Conv1d (batch_size, input_size, seq_length)
+        x = x.permute(0, 2, 1) 
+        # Apply 1D CNN (feature-wise)
+        x = self.conv1d(x)  # Output shape: (batch_size, cnn_channels, seq_length)
+        # Permute back for LSTM (batch_size, seq_length, cnn_channels)
+        x = x.permute(0, 2, 1)
+
+        lstm_out, _ = self.lstm(x)
+        last_time_step = lstm_out[:, -1, :] # Get output features (hidden state) of the end of the sequence of the LSTM 
+        return self.linear(last_time_step).squeeze(-1)
+    
+
+# LSTM direct model with CNN layer
+class Seq2SeqLSTMEncDec_CNN(nn.Module): # Option 2
+    def __init__(self, input_dim=INPUT_SIZE, hidden_dim=HIDDEN_SIZE, output_dim=1, cnn_channels=16):
+        super(Seq2SeqLSTMEncDec_CNN, self).__init__()
+
+        # 1D CNN layers for encoder and decoder inputs
+        self.encoder_conv1d = nn.Conv1d(in_channels=input_dim, out_channels=cnn_channels, kernel_size=1)
+        self.decoder_conv1d = nn.Conv1d(in_channels=input_dim-1, out_channels=cnn_channels, kernel_size=1)
+
+        self.encoder_lstm = nn.LSTM(cnn_channels, hidden_dim, batch_first=True)
+        self.decoder_lstm = nn.LSTM(cnn_channels, hidden_dim, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, encoder_inputs, decoder_inputs):
+        # Ensure input has batch dimension
+        if encoder_inputs.dim() == 2:  # Single sequence (seq_length, input_dim)
+            encoder_inputs = encoder_inputs.unsqueeze(0)  # Add batch dim -> (1, seq_length, input_dim)
+
+        if decoder_inputs.dim() == 2:  # Single sequence (seq_length, input_dim-1)
+            decoder_inputs = decoder_inputs.unsqueeze(0)  # Add batch dim -> (1, seq_length, input_dim-1)
+
+        # Apply 1D CNN to encoder inputs (feature-wise convolution)
+        encoder_inputs = encoder_inputs.permute(0, 2, 1)  # (batch_size, input_dim, seq_length)
+        encoder_inputs = self.encoder_conv1d(encoder_inputs)  # (batch_size, cnn_channels, seq_length)
+        encoder_inputs = encoder_inputs.permute(0, 2, 1)  # (batch_size, seq_length, cnn_channels)
+
+        # Apply 1D CNN to decoder inputs (feature-wise convolution)
+        decoder_inputs = decoder_inputs.permute(0, 2, 1)  # (batch_size, input_dim-1, seq_length)
+        decoder_inputs = self.decoder_conv1d(decoder_inputs)  # (batch_size, cnn_channels, seq_length)
+        decoder_inputs = decoder_inputs.permute(0, 2, 1)  # (batch_size, seq_length, cnn_channels)
+
+        # Encode the input sequence (hidden and cell states of every element in the sequence) https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html
+        _, (hidden, cell) = self.encoder_lstm(encoder_inputs)
+
+        # Decode using an LSTM
+        decoder_outputs, _ = self.decoder_lstm(decoder_inputs, (hidden, cell))
+
+        # Fully connected layer for final output
+        output = self.fc(decoder_outputs)
+        return output

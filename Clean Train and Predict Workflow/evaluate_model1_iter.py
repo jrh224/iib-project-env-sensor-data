@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from torch.utils.data import TensorDataset
 import config
-from models import LSTMModel, Seq2SeqLSTM, Seq2SeqLSTMEncDec
+from models import LSTMModel, LSTM_CNN_Model, Seq2SeqLSTM, Seq2SeqLSTMEncDec
 from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
 from utils.fake_data_gen import *
@@ -24,9 +24,11 @@ hours = 2160
 t = np.linspace(0, hours, length)
 # test_matrix = gen_sum_of_consts(hours=hours, length=length, no_covariates=6, seed=51)
 # test_matrix = gen_sum_of_consts_w_lag(hours=hours, length=length, no_covariates=6, seed=51)
-test_matrix = gen_sum_of_exp(hours=hours, length=length, no_covariates=6, seed=51)
+# test_matrix = gen_sum_of_sine_waves_rand_phase(hours=hours, length=length, no_covariates=6, seed=51)
+test_matrix = gen_r2c2_w_irregular_heating_real_meteo(hours=2160, length=25920, seed=51) # 3 covariates
 test_matrix_unscaled = test_matrix.copy()
 
+WITH_CNN = True
 
 scalers = joblib.load('scalers.gz') # Load up the previously trained scalers
 for i in range(test_matrix.shape[1]): # for each feature column
@@ -35,7 +37,10 @@ for i in range(test_matrix.shape[1]): # for each feature column
 
 
 # Initialise the model for prediction
-model = LSTMModel()
+if WITH_CNN:
+    model = LSTM_CNN_Model()
+else:
+    model = LSTMModel()
 model.load_state_dict(torch.load(config.PREDICT_MODEL, weights_only=True))
 
 # Pass through train dataset, predicting one hour every half hour
@@ -47,10 +52,12 @@ y_actuals = []
 # assuming i_start is the beginning of the lookback period
 for i_start in range(0, test_matrix.shape[0] - config.LOOKBACK - config.HORIZON, config.STRIDE): # stride = 1
     y_prediction = autoregressive_predict(model, test_matrix, config.HORIZON, i_start)
-    y_prediction = scalers[0].inverse_transform(np.array(y_prediction).reshape(-1, 1))
+    # y_prediction = scalers[0].inverse_transform(np.array(y_prediction).reshape(-1, 1))
+    y_prediction = np.array(y_prediction).reshape(-1, 1)
     y_predictions.extend(np.array(y_prediction).reshape(-1).flatten())
 
-    y_actual = test_matrix_unscaled[i_start+config.LOOKBACK:i_start+config.LOOKBACK+config.HORIZON, 0]
+    # y_actual = test_matrix_unscaled[i_start+config.LOOKBACK:i_start+config.LOOKBACK+config.HORIZON, 0]
+    y_actual = test_matrix[i_start+config.LOOKBACK:i_start+config.LOOKBACK+config.HORIZON, 0]
     y_actuals.extend(np.array(y_actual).reshape(-1).flatten())
 
 

@@ -240,3 +240,19 @@ def autoregressive_predict(model, test_matrix, num_predictions, start_point=0):
         
     return predictions
 
+def get_xgboost_inputs(dataset):
+    """
+    Parameters:
+        dataset: TensorDataset [which returns (enc_inp, dec_inp, targets)]
+    Returns:
+        X: np.array (num_samples, num_features) e.g. (2500, 156)
+        y: np.array (num_samples, num_targets) e.g. (2500, 12)
+    """
+    X = []
+    y = []
+    for enc_inp, dec_inp, targets in dataset:
+        past_values = enc_inp.flatten()
+        future_values = dec_inp.flatten()
+        X.append(np.concatenate([past_values, future_values]))
+        y.append(targets.flatten())
+    return np.array(X), np.array(y)

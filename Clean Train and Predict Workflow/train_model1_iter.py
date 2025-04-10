@@ -13,37 +13,59 @@ from torch.utils.data import DataLoader, TensorDataset
 import joblib
 
 import config
-from models import LSTMModel, Seq2SeqLSTM, Seq2SeqLSTMEncDec
+from models import LSTMModel, LSTM_CNN_Model, Seq2SeqLSTM, Seq2SeqLSTMEncDec
 from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
 from utils.fake_data_gen import *
 
-best_model_path = "13mar_1310_m1.pth"  # Path to save best model. Make sure to update this
+best_model_path = "10apr_1502_B0A732CC46BC_m1_cnn.pth"  # Path to save best model. Make sure to update this
+scaler_file = "scalers_B0A732CC46BC.gz"
 
 # Can vary the data generated here
 # full_matrix = gen_sum_of_consts(hours=2160, length=25920, no_covariates=6, seed=42)
 # full_matrix = gen_sum_of_consts_w_lag(hours=2160, length=25920, no_covariates=6, seed=42)
-full_matrix = gen_sum_of_exp(hours=2160, length=25920, no_covariates=6, seed=42)
+# full_matrix = gen_sum_of_sine_waves_rand_phase(hours=2160, length=25920, no_covariates=6, seed=42)
+# full_matrix = gen_r2c2_w_irregular_heating_real_meteo(seed=42) # 3 covariates
 
-train_split = config.TRAIN_SPLIT
-train_split_i = int(np.floor(full_matrix.shape[0] * 0.8))
 
-train_matrix = full_matrix[:train_split_i, :]
-val_matrix = full_matrix[train_split_i:, :]
+WITH_CNN = True # decide whether to include the CNN layer or not
 
+# train_split = config.TRAIN_SPLIT
+# train_split_i = int(np.floor(full_matrix.shape[0] * 0.8))
+
+# train_matrix = full_matrix[:train_split_i, :]
+# val_matrix = full_matrix[train_split_i:, :]
+
+# Import sensor data into CustomDataframe object
+sensor_data = CustomDataframe(filename=config.FILENAME)
+sensor_data.interpolate_missing_rows()
+sensor_data.resample(freq='5Min')
+
+# Add external temperature to sensor_data object
+sensor_data.add_ext_temp_column(lat=config.LAT, long=config.LONG)
+# Add sunrise and sunset column (ensure this is done AFTER interpolation, since it is binary 0-1)
+sensor_data.add_sunrise_sunset_column(lat=config.LAT, long=config.LONG)
+
+sensor_data_train, idx_blocks_train = sensor_data.filter_by_date_ranges(dates=config.TRAIN_RANGE, in_place=False)
+train_matrix = sensor_data_train.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
+print(f"Train Matrix Created Successfully [Shape: {train_matrix.shape}]")
+
+sensor_data_val, idx_blocks_val = sensor_data.filter_by_date_ranges(dates=config.VALID_RANGE, in_place=False)
+val_matrix = sensor_data_val.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
+print(f"Validation Matrix Created Successfully [Shape: {val_matrix.shape}]")
 
 # Scale each column using a different scaler
 scalers = []
 for i in range(train_matrix.shape[1]): # for each feature column
     scaler = MinMaxScaler()
     train_matrix[:, i] = scaler.fit_transform(train_matrix[:, i].reshape(-1, 1)).flatten() # scale one column at a time
-    val_matrix[:, i] = scaler.transform(val_matrix[:, i].reshape(-1, 1)).flatten()  # Transform validation data
+    val_matrix[:, i] = scaler.transform(val_matrix[:, i].reshape(-1, 1)).flatten() 
     scalers.append(scaler)
-joblib.dump(scalers, 'scalers.gz') # Store all the scalers in order to be used when predicting
+joblib.dump(scalers, scaler_file) # Store all the scalers in order to be used when predicting
 
 
-X_train, y_train = create_sequences(train_matrix, lookback=config.LOOKBACK, horizon=1, stride=config.STRIDE, target_col=0, blocks=None)
-X_val, y_val = create_sequences(val_matrix, lookback=config.LOOKBACK, horizon=1, stride=config.STRIDE, target_col=0, blocks=None)
+X_train, y_train = create_sequences(train_matrix, lookback=config.LOOKBACK, horizon=1, stride=config.STRIDE, target_col=0, blocks=idx_blocks_train)
+X_val, y_val = create_sequences(val_matrix, lookback=config.LOOKBACK, horizon=1, stride=config.STRIDE, target_col=0, blocks=idx_blocks_val)
 
 print(f"LSTM inputs and targets successfully generated. X_train: {X_train.shape}, y_train: {y_train.shape}")
 
@@ -52,7 +74,10 @@ train_loader = DataLoader(list(zip(X_train, y_train)), batch_size=config.BATCH_S
 val_loader = DataLoader(list(zip(X_val, y_val)), batch_size=config.BATCH_SIZE, shuffle=True)
 
 # Initialise model
-model = LSTMModel()
+if WITH_CNN:
+    model = LSTM_CNN_Model()
+else:
+    model = LSTMModel()
 print("Training model")
 
 # Define optimizer and loss function

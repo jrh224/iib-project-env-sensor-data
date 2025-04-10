@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from torch.utils.data import TensorDataset
 import config
-from models import LSTMModel, Seq2SeqLSTM, Seq2SeqLSTMEncDec
+from models import LSTMModel, Seq2SeqLSTM, Seq2SeqLSTMEncDec, Seq2SeqLSTMEncDec_CNN
 from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
 from utils.fake_data_gen import *
@@ -24,8 +24,11 @@ hours = 2160
 t = np.linspace(0, hours, length)
 # test_matrix = gen_sum_of_consts(hours=hours, length=length, no_covariates=6, seed=51)
 # test_matrix = gen_sum_of_consts_w_lag(hours=hours, length=length, no_covariates=6, seed=51)
-test_matrix = gen_sum_of_exp(hours=hours, length=length, no_covariates=6, seed=51)
+# test_matrix = gen_sum_of_sine_waves_rand_phase(hours=hours, length=length, no_covariates=6, seed=51)
+test_matrix = gen_r2c2_w_irregular_heating_real_meteo(hours=2160, length=25920, seed=51) # 3 covariates
 test_matrix_unscaled = test_matrix.copy()
+
+WITH_CNN = False
 
 
 scalers = joblib.load('scalers.gz') # Load up the previously trained scalers
@@ -41,7 +44,10 @@ test_dataset = TensorDataset(test_enc_inp, test_dec_inp, test_targets)
 print(f"EncDec inputs successfully generated. EncInp: {test_enc_inp.shape}, DecInp: {test_dec_inp.shape}, Targets: {test_targets.shape}")
 
 # Initialise the model for prediction
-model = Seq2SeqLSTMEncDec()
+if WITH_CNN:
+    model = Seq2SeqLSTMEncDec_CNN()
+else:
+    model = Seq2SeqLSTMEncDec()
 model.load_state_dict(torch.load(config.PREDICT_MODEL, weights_only=True))
 
 # Pass through train dataset, predicting one hour every half hour
@@ -61,8 +67,10 @@ for enc_inp, dec_inp, target in test_dataset:
 
     # Inverse transform predictions to get correct scale
     y_prediction = scalers[0].inverse_transform(np.array(predictions).reshape(-1, 1))
+    # y_prediction = np.array(predictions).reshape(-1, 1)
     # Get actual IAT readings
     y_actual = scalers[0].inverse_transform(np.array(target).reshape(-1, 1))
+    # y_actual = np.array(target).reshape(-1, 1)
 
     # Store y_prediction and y_actual for evaluation later on
     y_predictions.extend(np.array(y_prediction).reshape(-1).flatten())

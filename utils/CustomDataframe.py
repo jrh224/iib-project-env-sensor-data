@@ -43,6 +43,13 @@ class CustomDataframe:
 
             # Drop rows where there are NaN values (i.e., failed conversions)
             self.df.dropna(subset=['_value', '_start', '_stop', '_time'], inplace=True)
+
+            # Examine duplicates
+            # print(self.df[self.df.duplicated(subset=['_time', '_field'], keep=False)][['_time', '_field', '_value']])
+
+            # Merge duplicate readings by taking average
+            self.df = self.df.groupby(['_time', '_field'], as_index=False)['_value'].mean()
+
             # Pivot the DataFrame to convert it into the desired format
             self.df = self.df.pivot(index='_time', columns='_field', values='_value')
             self.df.reset_index(inplace=True)
@@ -583,6 +590,37 @@ class CustomDataframe:
 
         # Perform linear interpolation to fill missing temperature values
         new_temp_df['temperature_2m'] = new_temp_df['temperature_2m'].interpolate(method='linear')
+
+        self.df = pd.merge(self.df, new_temp_df, left_index=True, right_index=True, how="left")
+
+    def add_ext_temp_and_solarirr_column(self, lat, long):
+        """
+        Add a new column to dataframe with the external temperatures between the time stamps.
+        Automatically determines the start_date and end_date based on the min and max date stamps.
+        Performs interpolation to fill in all rows with T_ext.
+
+        NB: Dates should be pd.date_time objects e.g. start_date = pd.to_datetime("10/11/2024 13:00")
+        NB: Assumes that readings start from exactly on the hour
+        """
+
+        start_date = self.df.index.min()
+        start_date = start_date.replace(second=0, microsecond=0, minute=0) # round back to prev hour
+        end_date = self.df.index.max()
+        end_date = end_date.replace(second=0, microsecond=0, minute=0, hour=end_date.hour+1) # round up to next hour
+
+        hourly_extT_dataframe = get_temp_and_solar(start_date, end_date, lat, long).set_index('date')
+
+        measurement_period = self.df.index.freq
+
+        new_time_index = pd.date_range(start=start_date, end=end_date, freq=measurement_period)  # 15-second intervals
+        new_temp_df = pd.DataFrame(index=new_time_index)
+
+        new_temp_df = new_temp_df.merge(hourly_extT_dataframe, left_index=True, right_index=True, how="left")
+
+
+        # Perform linear interpolation to fill missing temperature values
+        new_temp_df['temperature_2m'] = new_temp_df['temperature_2m'].interpolate(method='linear')
+        new_temp_df['global_tilted_irradiance'] = new_temp_df['global_tilted_irradiance'].interpolate(method='linear')
 
         self.df = pd.merge(self.df, new_temp_df, left_index=True, right_index=True, how="left")
 

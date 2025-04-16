@@ -26,7 +26,7 @@ from utils.fake_data_gen import *
 # test_matrix = gen_r2c2_w_irregular_heating_real_meteo(hours=2160, length=25920, seed=51) # 3 covariates
 # test_matrix_unscaled = test_matrix.copy()
 
-WITH_CNN = True # decide whether to include the CNN layer or not
+WITH_CNN = False # decide whether to include the CNN layer or not
 
 
 # Import sensor data into CustomDataframe object
@@ -72,10 +72,10 @@ model.load_state_dict(torch.load(config.PREDICT_MODEL, weights_only=True))
 # Perform predictions
 model.eval()
 
-start_time = pd.to_datetime("2025-01-21 21:00:00").tz_localize("Europe/London").tz_convert("UTC")
+start_time = pd.to_datetime("2024-12-07 00:05:00").tz_localize("Europe/London").tz_convert("UTC")
 start_point=sensor_data_test.df.index.get_loc(start_time)
 
-no_predictions = 96
+no_predictions = 48
 # no_predictions = config.HORIZON
 predictions = autoregressive_predict(model, test_matrix, no_predictions, start_point=start_point)
 

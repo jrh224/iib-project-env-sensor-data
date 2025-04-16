@@ -15,15 +15,15 @@ EARLY_STOPPING_PATIENCE = 20 # 8
 STRIDE = 1 # =1 means no skipping start points in the data when creating sequences
 
 # Model and scalers to use for prediction
-PREDICT_MODEL = "10apr_1502_B0A732CC46BC_m1_cnn.pth"
-SCALER_FILE = "scalers_B0A732CC46BC.gz"
+PREDICT_MODEL = "15apr_2051_room1_m1.pth"
+SCALER_FILE = "scalers_room1.gz"
 
 NUM_PREDICTIONS = 240 # Not really used anymore
 PREDICT_FROM = pd.to_datetime("2024/12/07 00:05:00").tz_localize('UTC') # Start date of lookback period
 
 # Determine the train / test data source
-FILENAME = 'wadham college/new rooms 6th april/EyeSenseB0A732CC46BC-24Nov2024 to 24Feb2025.csv' 
-TEST_FILENAME = 'wadham college/new rooms 6th april/EyeSenseB0A732CC46BC-24Nov2024 to 24Feb2025.csv'
+FILENAME = 'wadham college/new rooms 6th april/EyeSenseB0A732CC4A38-24Nov2024 to 24Feb2025.csv' 
+TEST_FILENAME = 'wadham college/new rooms 6th april/EyeSenseB0A732CC4A38-24Nov2024 to 24Feb2025.csv'
 # FILENAME = 'wadham college/Dom Bursar 24Nov2024 to Feb2025.csv'
 
 # Define the start and end dates of the training and test data

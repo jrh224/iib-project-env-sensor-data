@@ -18,8 +18,8 @@ from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
 from utils.fake_data_gen import *
 
-best_model_path = "10apr_1502_B0A732CC46BC_m1_cnn.pth"  # Path to save best model. Make sure to update this
-scaler_file = "scalers_B0A732CC46BC.gz"
+best_model_path = "15apr_2051_room3_m1.pth"  # Path to save best model. Make sure to update this
+scaler_file = "scalers_room3.gz"
 
 # Can vary the data generated here
 # full_matrix = gen_sum_of_consts(hours=2160, length=25920, no_covariates=6, seed=42)
@@ -28,7 +28,7 @@ scaler_file = "scalers_B0A732CC46BC.gz"
 # full_matrix = gen_r2c2_w_irregular_heating_real_meteo(seed=42) # 3 covariates
 
 
-WITH_CNN = True # decide whether to include the CNN layer or not
+WITH_CNN = False # decide whether to include the CNN layer or not
 
 # train_split = config.TRAIN_SPLIT
 # train_split_i = int(np.floor(full_matrix.shape[0] * 0.8))

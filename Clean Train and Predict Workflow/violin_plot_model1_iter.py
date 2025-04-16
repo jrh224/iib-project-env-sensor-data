@@ -96,7 +96,7 @@ plt.figure(figsize=(10, 6))
 sns.violinplot(x="Timestep", y="Error", data=df_long, inner="quartile", cut=0, bw_adjust=0.5)
 fontsize = 15
 labelsize = 13
-plt.title("MAE Distribution Across Timesteps (Model 1: Iterative )", fontsize=fontsize)
+plt.title("MAE Distribution Across Timesteps (Model 4: Iterative + CNN)", fontsize=fontsize)
 plt.gca().set_xlabel("Timestep into the future", fontsize=fontsize)
 plt.gca().set_ylabel("MAE °C", fontsize=fontsize)
 plt.gca().tick_params(axis='x', labelsize=labelsize)  # Set font size for x-axis ticks

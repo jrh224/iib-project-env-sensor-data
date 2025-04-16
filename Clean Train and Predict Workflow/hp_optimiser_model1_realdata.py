@@ -23,9 +23,8 @@ print(torch.cuda.is_available())  # Should return True if GPU is enabled
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-
-WITH_CNN = False # decide whether to include the CNN layer or not
-best_model_path = "26mar_1555_m1.pth"
+WITH_CNN = True # decide whether to include the CNN layer or not
+best_model_path = "15apr_1812_dombursar_m1_cnn.pth"
 
 # Import sensor data into CustomDataframe object
 sensor_data = CustomDataframe(filename=config.FILENAME)
@@ -52,7 +51,7 @@ for i in range(train_matrix.shape[1]): # for each feature column
     train_matrix[:, i] = scaler.fit_transform(train_matrix[:, i].reshape(-1, 1)).flatten() # scale one column at a time
     val_matrix[:, i] = scaler.transform(val_matrix[:, i].reshape(-1, 1)).flatten() 
     scalers.append(scaler)
-joblib.dump(scalers, 'real_data_scalers.gz') # Store all the scalers in order to be used when predicting
+joblib.dump(scalers, "scalers_dombursar.gz") # Store all the scalers in order to be used when predicting
 
 # Define the objective function
 def objective(trial):

@@ -75,6 +75,8 @@ model.eval()
 
 
 past_covariates = []
+y_predictions = []
+y_actuals = []
 residuals = []
 
 for i_start in range(0, test_matrix.shape[0] - config.LOOKBACK - config.HORIZON, config.STRIDE): # stride = 1
@@ -86,9 +88,11 @@ for i_start in range(0, test_matrix.shape[0] - config.LOOKBACK - config.HORIZON,
     y_prediction = autoregressive_predict(model, test_matrix, config.HORIZON, i_start)
     y_prediction = scalers[0].inverse_transform(np.array(y_prediction).reshape(-1, 1))
     y_prediction = np.array(y_prediction).reshape(-1)
+    y_predictions.append(y_prediction)
     
     y_actual = test_matrix_unscaled[i_start+config.LOOKBACK:i_start+config.LOOKBACK+config.HORIZON, 0]
     y_actual = np.array(y_actual).reshape(-1)
+    y_actuals.append(y_actual)
 
     residual = np.abs(y_actual - y_prediction)
     residuals.append(residual)
@@ -104,94 +108,83 @@ residuals = np.array(residuals) # (# samples, # datapoints) e.g. (2568, 12)
 X = past_covariates.reshape(past_covariates.shape[0], -1)  # (2568, 84)
 y = residuals  # (2568, 12)
 
-# Optional: Split into train and test sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Create indices for tracking
+original_indices = np.arange(X.shape[0])
+
+# Split data and indices together
+X_train, X_test, y_train, y_test, idx_train, idx_test = train_test_split(
+    X, y, original_indices, test_size=0.2, random_state=42
+)
+
 
 # Initialize the XGBoost model
 xgb_model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=100, max_depth=5)
-
-# Wrap with MultiOutputRegressor to predict multiple outputs (12 residuals)
 multi_output_model = MultiOutputRegressor(xgb_model)
 
 # Train the model
 multi_output_model.fit(X_train, y_train)
 
-# Evaluate
-y_pred = multi_output_model.predict(X_test)
-mae = mean_absolute_error(y_test, y_pred)
+# Use the XGBoost model to predict residuals for all test samples
+predicted_residuals = multi_output_model.predict(X_test)  # shape: (n_samples, horizon)
+mae = mean_absolute_error(y_test, predicted_residuals)
 print("MAE on Test Set:", mae) # find mae
 
 # Measure the magnitude of actual residuals (from the base model)
 true_residual_magnitudes = np.mean(np.abs(y_test), axis=1)  # (samples,)
 
 # Get indices of samples with lowest and highest errors
-num_samples = 2  # adjust how many to plot
+num_samples = 3
 
 lowest_residual_indices = np.argsort(true_residual_magnitudes)[:num_samples]
 highest_residual_indices = np.argsort(true_residual_magnitudes)[-num_samples:]
 
+
 fontsize = 15
 labelsize = 13
 
-# def plot_samples(indices, title_prefix):
-#     for i, idx in enumerate(indices):
-#         true_residual = y_test[idx]
-#         predicted_residual = y_pred[idx]
-#         mean_true = np.mean(np.abs(true_residual))
-#         mean_pred = np.mean(np.abs(predicted_residual))
+def plot_with_predicted_residuals(y_preds_all, y_actuals_all, predicted_residuals, original_test_indices, selected_test_indices, title_prefix="Sample", multiplier=1.5):
+    for i, local_test_idx in enumerate(selected_test_indices):
+        # Map to full dataset index
+        full_idx = original_test_indices[local_test_idx]
 
-#         plt.subplot(len(indices), 1, i + 1)
-#         plt.plot(true_residual, label='True Residuals', marker='o')
-#         plt.plot(predicted_residual, label='Predicted Residuals', marker='x')
-#         print(f'{title_prefix} | Mean of true residual: {mean_true:.4f} | Mean of predicted residual: {mean_pred:.4f}')
-#         # plt.title(
-#         #     f'{title_prefix}',
-#         #     fontsize=fontsize
-#         # )
-#         plt.gca().set_xlabel("Timestep", fontsize=fontsize)
-#         plt.gca().set_ylabel("Residual °C", fontsize=fontsize)
-#         plt.gca().tick_params(axis='x', labelsize=labelsize)  # Set font size for x-axis ticks
-#         plt.gca().tick_params(axis='y', labelsize=labelsize)
-#         plt.grid(True)
-#         # Add legend only to the top subplot
-#         if i == 0:
-#             plt.legend(loc='upper left', fontsize=labelsize)  # legend in bottom right
-#     plt.gcf().set_figheight(5)
-#     plt.gcf().set_figwidth(10)
-#     plt.tight_layout()
-#     plt.show()
+        y_pred = y_predictions[full_idx]
+        y_act = y_actuals[full_idx]
+        y_err = predicted_residuals[local_test_idx] * multiplier
 
-# # Plot lowest-residual (base model was accurate) samples
-# plot_samples(lowest_residual_indices, title_prefix="Smallest Base Residuals")
+        plt.figure(figsize=(10, 5))
+        plt.errorbar(np.arange(len(y_pred)), y_pred, yerr=y_err, fmt='-o', label='Predicted Temp + Error Bars', capsize=5)
+        plt.plot(np.arange(len(y_act)), y_act, '-x', label='Actual Temp')
+        plt.title(f"{title_prefix} {i+1}", fontsize=fontsize)
+        plt.gca().set_xlabel("Timestep (5 mins / interval)", fontsize=fontsize)
+        plt.gca().set_ylabel("Temperature °C", fontsize=fontsize)
+        plt.gca().tick_params(axis='x', labelsize=labelsize)
+        plt.gca().tick_params(axis='y', labelsize=labelsize)
+        plt.legend(fontsize=labelsize)
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
 
-# # Plot highest-residual (base model failed) samples
-# plot_samples(highest_residual_indices, title_prefix="Largest Base Residuals")
+multiplier = 2
 
+plot_with_predicted_residuals(
+    y_predictions,
+    y_actuals,
+    predicted_residuals,
+    original_test_indices=idx_test,
+    selected_test_indices=lowest_residual_indices,
+    title_prefix="Lowest Residual Test Sample",
+    multiplier=multiplier
+)
 
+plot_with_predicted_residuals(
+    y_predictions,
+    y_actuals,
+    predicted_residuals,
+    original_test_indices=idx_test,
+    selected_test_indices=highest_residual_indices,
+    title_prefix="Highest Residual Test Sample",
+    multiplier=multiplier
+)
 
-
-
-
-# Compute mean absolute residual per sample
-true_means = np.mean(np.abs(y_test), axis=1)
-predicted_means = np.mean(np.abs(y_pred), axis=1)
-
-# Sort samples by true residual mean
-sorted_indices = np.argsort(true_means)
-sorted_true = true_means[sorted_indices]
-sorted_predicted = predicted_means[sorted_indices]
-
-# Plotting
-plt.figure(figsize=(10, 5))
-plt.plot(sorted_true, label='Mean of true residual', marker='', linewidth=2)
-plt.plot(sorted_predicted, label='Mean of predicted residual', marker='', linewidth=2)
-plt.gca().set_xlabel("Sample Index (sorted by true residual)", fontsize=fontsize)
-plt.gca().set_ylabel("Mean Absolute Residual °C", fontsize=fontsize)
-plt.gca().tick_params(axis='x', labelsize=labelsize)  # Set font size for x-axis ticks
-plt.gca().tick_params(axis='y', labelsize=labelsize)
-plt.title('True vs Predicted Residual Magnitudes Across Samples', fontsize=fontsize)
-plt.legend(loc='upper left', fontsize=labelsize)
-plt.grid(True)
-plt.tight_layout()
-plt.show()
 

@@ -256,3 +256,51 @@ def get_xgboost_inputs(dataset):
         X.append(np.concatenate([past_values, future_values]))
         y.append(targets.flatten())
     return np.array(X), np.array(y)
+
+
+def get_xgboost_inputs_iter(X_train, y_train):
+    """
+    Converts PyTorch tensors of shape (N, 12, 7) and (N,) into
+    NumPy arrays suitable for XGBoost: (N, 84) and (N,).
+    """
+    # Ensure tensors are on CPU and detached
+    X_np = X_train.cpu().detach().numpy()
+    y_np = y_train.cpu().detach().numpy()
+
+    # Flatten the last two dimensions: (N, 12, 7) -> (N, 84)
+    X_flat = X_np.reshape(X_np.shape[0], -1)
+
+    return X_flat, y_np
+
+
+def xgboost_autoregressive_predict(model, test_matrix, num_predictions, start_point=0):
+    """
+    Make autoregressive predictions using a trained model
+    Returns:
+        - List: predictions (# num_predictions)
+    """
+    predictions = []
+
+    current_lookback = test_matrix[start_point:config.LOOKBACK+start_point, :]
+    
+    for i in range(num_predictions):
+        # Convert current_lookback to flattened input, but in 2d structure to match xgboost format
+        input_tensor = current_lookback.flatten().reshape(1, -1) 
+        
+        predicted = model.predict(input_tensor)
+            
+        # Store prediction
+        predictions.append(predicted.item())
+        
+        # Update sequence: assumes that column 0 is the target column
+        new_entry = test_matrix[start_point + config.LOOKBACK + i, :].copy()  # Copy the next row
+        new_entry[0] = predicted.item()  # Replace the first column with the prediction
+
+        
+        # Update sequence: remove oldest, add new prediction
+        current_lookback = np.vstack([
+            current_lookback[1:],  # Remove oldest entry
+            new_entry       # Add new prediction
+        ])
+        
+    return predictions

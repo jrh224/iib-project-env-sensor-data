@@ -18,8 +18,8 @@ from utils.CustomDataframe import CustomDataframe
 from utils.helper_functions import *
 from utils.fake_data_gen import *
 
-best_model_path = "08apr_0938_B0A732379968.pth"  # Path to save best model
-scaler_file = "scalers_B0A732379968.gz"
+best_model_path = "22may_1402_room1_directcnnoptim.pth"  # Path to save best model
+scaler_file = "scalers_room1.gz"
 
 # Can vary the data generated here
 # full_matrix = gen_sum_of_consts(hours=2160, length=25920, no_covariates=6, seed=42)

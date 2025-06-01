@@ -69,55 +69,60 @@ model.load_state_dict(torch.load(config.PREDICT_MODEL, weights_only=True))
 # Perform predictions
 model.eval()
 
-start_time = pd.to_datetime("2024-12-08 04:30:00").tz_localize("Europe/London").tz_convert("UTC")
-# start_time = pd.to_datetime("2025-02-22 11:00:00").tz_localize("Europe/London").tz_convert("UTC")
-start_point=sensor_data_test.df.index.get_loc(start_time)
-print("Start index: ", start_point)
+start_time = pd.to_datetime("2025-01-22 02:30:00").tz_localize("Europe/London").tz_convert("UTC")
+start_point_init = sensor_data_test.df.index.get_loc(start_time)
 
-tlookback = start_point
-t0 = tlookback+config.LOOKBACK
-thorizon = t0+config.HORIZON
+for start_point in range(start_point_init, len(sensor_data_test.df), 6):
+    # start_time = pd.to_datetime("2024-12-08 04:30:00").tz_localize("Europe/London").tz_convert("UTC")
+    # start_time = pd.to_datetime("2025-01-22 10:05:00").tz_localize("Europe/London").tz_convert("UTC")
 
-enc_inp = torch.tensor(test_matrix[tlookback:t0, :], dtype=torch.float32) # All features, before t=0 (start_point+lookback)
-dec_inp = torch.tensor(test_matrix[t0:thorizon, 1:], dtype=torch.float32) # Not including feature 0 (the target)
+    # start_point=sensor_data_test.df.index.get_loc(start_time)
+    print("Start index: ", start_point)
 
-predictions = model(enc_inp, dec_inp)
-predictions = predictions.detach().cpu().numpy()  # Convert to NumPy array
+    tlookback = start_point
+    t0 = tlookback+config.LOOKBACK
+    thorizon = t0+config.HORIZON
 
+    enc_inp = torch.tensor(test_matrix[tlookback:t0, :], dtype=torch.float32) # All features, before t=0 (start_point+lookback)
+    dec_inp = torch.tensor(test_matrix[t0:thorizon, 1:], dtype=torch.float32) # Not including feature 0 (the target)
 
-# Inverse transform predictions to get correct scale
-y_prediction = scalers[0].inverse_transform(np.array(predictions).reshape(-1, 1))
-# print(y_prediction)
-
-y_actual = test_matrix_unscaled[tlookback:thorizon, 0] # column 0 = targets
-# print(y_actual)
-
-# x_actual = t[tlookback : thorizon]
-# x_prediction = t[t0 : thorizon]
-x_actual = sensor_data_test.df.iloc[tlookback : thorizon].index
-x_prediction = sensor_data_test.df.iloc[t0:thorizon].index
+    predictions = model(enc_inp, dec_inp)
+    predictions = predictions.detach().cpu().numpy()  # Convert to NumPy array
 
 
-# print(x_actual.shape)
-# print(x_prediction.shape)
-# print(y_actual.shape)
-# print(y_prediction.shape)
+    # Inverse transform predictions to get correct scale
+    y_prediction = scalers[0].inverse_transform(np.array(predictions).reshape(-1, 1))
+    # print(y_prediction)
 
-fontsize = 15
-labelsize = 13
-plt.plot(x_actual, y_actual, label='Ground truth temperature', color="blue", linestyle="-", marker="o")
-plt.plot(x_prediction, y_prediction, label='Predicted temperature', color="red", linestyle="--", marker="x")
-# plt.plot(x_actual, exttemp, label="External temperature", color="green", linestyle="-", marker="o")
-# plt.plot(x_actual, control_actual, label="Control signal", color="green", linestyle="--")
-plt.title('Predicted temperature vs ground truth (Model 3: Direct + CNN)', fontsize=fontsize)
-plt.gca().set_xlabel("Time", fontsize=fontsize)
-plt.gca().set_ylabel("Temperature °C", fontsize=fontsize)
-plt.gca().tick_params(axis='x', labelsize=labelsize)  # Set font size for x-axis ticks
-plt.gca().tick_params(axis='y', labelsize=labelsize)
-plt.grid(True)
-plt.xticks(rotation=45)
-plt.legend(fontsize=labelsize)
-plt.gcf().set_tight_layout(True)
-plt.gcf().set_figheight(5)
-plt.gcf().set_figwidth(8)
-plt.show()
+    y_actual = test_matrix_unscaled[tlookback:thorizon, 0] # column 0 = targets
+    # print(y_actual)
+
+    # x_actual = t[tlookback : thorizon]
+    # x_prediction = t[t0 : thorizon]
+    x_actual = sensor_data_test.df.iloc[tlookback : thorizon].index
+    x_prediction = sensor_data_test.df.iloc[t0:thorizon].index
+
+
+    # print(x_actual.shape)
+    # print(x_prediction.shape)
+    # print(y_actual.shape)
+    # print(y_prediction.shape)
+
+    fontsize = 15
+    labelsize = 13
+    plt.plot(x_actual, y_actual, label='Ground truth temperature', color="blue", linestyle="-", marker="o")
+    plt.plot(x_prediction, y_prediction, label='Predicted temperature', color="red", linestyle="--", marker="x")
+    # plt.plot(x_actual, exttemp, label="External temperature", color="green", linestyle="-", marker="o")
+    # plt.plot(x_actual, control_actual, label="Control signal", color="green", linestyle="--")
+    plt.title('Predicted temperature vs ground truth (Model 3: Direct + CNN)', fontsize=fontsize)
+    plt.gca().set_xlabel("Time", fontsize=fontsize)
+    plt.gca().set_ylabel("Temperature °C", fontsize=fontsize)
+    plt.gca().tick_params(axis='x', labelsize=labelsize)  # Set font size for x-axis ticks
+    plt.gca().tick_params(axis='y', labelsize=labelsize)
+    plt.grid(True)
+    plt.xticks(rotation=45)
+    plt.legend(fontsize=labelsize)
+    plt.gcf().set_tight_layout(True)
+    plt.gcf().set_figheight(5)
+    plt.gcf().set_figwidth(8)
+    plt.show()

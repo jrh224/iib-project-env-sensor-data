@@ -19,18 +19,34 @@ from utils.helper_functions import *
 from utils.fake_data_gen import *
 
 
-length = 25920
-hours = 2160
-t = np.linspace(0, hours, length)
-# test_matrix = gen_sum_of_consts(hours=hours, length=length, no_covariates=6, seed=51)
-# test_matrix = gen_sum_of_consts_w_lag(hours=hours, length=length, no_covariates=6, seed=51)
-# test_matrix = gen_sum_of_sine_waves_rand_phase(hours=hours, length=length, no_covariates=6, seed=51)
-test_matrix = gen_r2c2_w_irregular_heating_real_meteo(hours=2160, length=25920, seed=51) # 3 covariates
+# length = 25920
+# hours = 2160
+# t = np.linspace(0, hours, length)
+# # test_matrix = gen_sum_of_consts(hours=hours, length=length, no_covariates=6, seed=51)
+# # test_matrix = gen_sum_of_consts_w_lag(hours=hours, length=length, no_covariates=6, seed=51)
+# # test_matrix = gen_sum_of_sine_waves_rand_phase(hours=hours, length=length, no_covariates=6, seed=51)
+# test_matrix = gen_r2c2_w_irregular_heating_real_meteo(hours=2160, length=25920, seed=51) # 3 covariates
+# test_matrix_unscaled = test_matrix.copy()
+
+# Import sensor data into CustomDataframe object
+sensor_data = CustomDataframe(filename=config.FILENAME)
+sensor_data.interpolate_missing_rows()
+sensor_data.resample(freq='5Min')
+
+# Add external temperature to sensor_data object
+sensor_data.add_ext_temp_column(lat=config.LAT, long=config.LONG)
+# Add sunrise and sunset column (ensure this is done AFTER interpolation, since it is binary 0-1)
+sensor_data.add_sunrise_sunset_column(lat=config.LAT, long=config.LONG)
+
+sensor_data_test, idx_blocks_test = sensor_data.filter_by_date_ranges(dates=config.TEST_RANGE, in_place=False)
+test_matrix = sensor_data_test.create_pytorch_matrix(lat=config.LAT, long=config.LONG)
+print(f"Test Matrix Created Successfully [Shape: {test_matrix.shape}]")
+
 test_matrix_unscaled = test_matrix.copy()
 
 WITH_CNN = True
 
-scalers = joblib.load('scalers.gz') # Load up the previously trained scalers
+scalers = joblib.load(config.SCALER_FILE) # Load up the previously trained scalers
 for i in range(test_matrix.shape[1]): # for each feature column
     scaler = scalers[i] # Use the appropriate scaler for each column
     test_matrix[:, i] = scaler.transform(test_matrix[:, i].reshape(-1, 1)).flatten() # scale one column at a time

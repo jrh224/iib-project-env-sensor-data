@@ -13,7 +13,7 @@ from torch.utils.data import TensorDataset
 from matplotlib import pyplot as plt
 import pandas as pd
 
-model_filepath = "optimal_singleoutput_xgb_model_room3.pkl"
+model_filepath = "optimal_singleoutput_xgb_model_room1.pkl"
 
 # Import sensor data into CustomDataframe object
 sensor_data = CustomDataframe(filename=config.FILENAME)
@@ -50,7 +50,7 @@ start_point_loop=sensor_data_test.df.index.get_loc(start_time)
 for i in range(start_point_loop, 10000, 6):
     start_point=i
 
-    no_predictions = 48
+    no_predictions = 12
     y_pred = xgboost_autoregressive_predict(loaded_model, test_matrix, no_predictions, start_point)
 
     y_pred = scalers[0].inverse_transform(np.array(y_pred).reshape(-1, 1)).reshape(-1)
